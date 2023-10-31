@@ -1,3 +1,30 @@
+
+#main-wrapper {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr); /* Creates 6 columns */
+  grid-template-rows: repeat(4, 1fr); /* Creates 4 rows */
+  gap: 10px; /* Space between items */
+  padding: 10px; /* Padding around the entire grid */
+}
+
+.item {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden; /* Ensures content fits within each grid cell */
+  display: flex;
+  flex-direction: column;
+}
+
+.image-wrapper {
+  width: 100%;
+  height: auto; /* Adjust as needed */
+}
+
+.commands-wrapper-overlay,
+.sensors-wrapper-overlay {
+  padding: 5px;
+}
+
 * {
   margin: 0;
   padding: 0;

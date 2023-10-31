@@ -1,30 +1,4 @@
 {
-    "esp32cam8": {
-        "port": 8013,
-        "class": "cam-instance",
-        "display": "Cam #9",
-        "commands": [
-            {
-                "id": "ON_BOARD_LED",
-                "name": "Camera flashlight",
-                "class": "led-light",
-                "state": 0
-            }
-        ]
-    },
-    "esp32cam9": {
-        "port": 8014,
-        "class": "cam-instance",
-        "display": "Cam #10",
-        "commands": [
-            {
-                "id": "ON_BOARD_LED",
-                "name": "Camera flashlight",
-                "class": "led-light",
-                "state": 0
-            }
-        ]
-    },
     "esp32cam1": {
         "port": 8001,
         "class": "cam-instance",
@@ -116,7 +90,7 @@
             }
         ]
     },
-    "freenove": {
+    "esp32cam8": {
         "port": 8008,
         "class": "cam-instance",
         "display": "Cam #8",
@@ -126,41 +100,215 @@
                 "name": "Camera flashlight",
                 "class": "led-light",
                 "state": 0
-            },
-            {
-				"id": "MOTOR_FORWARD",
-				"label": "Forward",
-				"class": "forward-icon"
-            },
-            {
-				"id": "MOTOR_BACKWARD",
-				"label": "Backward",
-				"class": "backward-icon"
             }
         ]
     },
-    "gas1": {
+    "esp32cam9": {
         "port": 8009,
-        "display": "Cabin gas",
-        "class": "gas-sensor",
-        "commands": []
+        "class": "cam-instance",
+        "display": "Cam #9",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
     },
-    "gas2": {
+    "esp32cam10": {
         "port": 8010,
-        "display": "Electric gas",
-        "class": "gas-sensor",
-        "commands": []
+        "class": "cam-instance",
+        "display": "Cam #10",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
     },
-    "gas3": {
+    "esp32cam11": {
         "port": 8011,
-        "display": "Front Home gas",
-        "class": "gas-sensor",
-        "commands": []
+        "class": "cam-instance",
+        "display": "Cam #11",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
     },
-    "gas4": {
+    "esp32cam12": {
         "port": 8012,
-        "display": "Back Home gas",
-        "class": "gas-sensor",
-        "commands": []
+        "class": "cam-instance",
+        "display": "Cam #12",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam13": {
+        "port": 8013,
+        "class": "cam-instance",
+        "display": "Cam #13",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam14": {
+        "port": 8014,
+        "class": "cam-instance",
+        "display": "Cam #14",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam15": {
+        "port": 8015,
+        "class": "cam-instance",
+        "display": "Cam #15",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam16": {
+        "port": 8016,
+        "class": "cam-instance",
+        "display": "Cam #16",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam17": {
+        "port": 8017,
+        "class": "cam-instance",
+        "display": "Cam #17",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam18": {
+        "port": 8018,
+        "class": "cam-instance",
+        "display": "Cam #18",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam19": {
+        "port": 8019,
+        "class": "cam-instance",
+        "display": "Cam #19",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam20": {
+        "port": 8020,
+        "class": "cam-instance",
+        "display": "Cam #20",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam21": {
+        "port": 8021,
+        "class": "cam-instance",
+        "display": "Cam #21",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam22": {
+        "port": 8022,
+        "class": "cam-instance",
+        "display": "Cam #22",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam23": {
+        "port": 8023,
+        "class": "cam-instance",
+        "display": "Cam #23",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
+    },
+    "esp32cam24": {
+        "port": 8024,
+        "class": "cam-instance",
+        "display": "Cam #24",
+        "commands": [
+            {
+                "id": "ON_BOARD_LED",
+                "name": "Camera flashlight",
+                "class": "led-light",
+                "state": 0
+            }
+        ]
     }
 }

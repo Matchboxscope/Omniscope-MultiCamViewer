@@ -1,4 +1,9 @@
-const ws = new WebSocket('ws://192.168.0.150:8999');
+const ws = new WebSocket('ws://localhost:8999');
+
+document.getElementById('snapAllCameras').addEventListener('click', () => {
+    ws.send(JSON.stringify({ operation: 'snapAllCameras' }));
+});
+
 
 ws.addEventListener('open', (event) => {
 	ws.send(JSON.stringify({
@@ -7,6 +12,10 @@ ws.addEventListener('open', (event) => {
 		'data': {}
 	}));
 });
+
+
+
+
 
 ws.onmessage = message => {
 	let md = JSON.parse(message.data);
@@ -32,7 +41,7 @@ ws.onmessage = message => {
 		}
 
 		try {
-			console.log(device.sensors);
+			//console.log(device.sensors);
 			for (const [key, value] of Object.entries(device.sensors)) {
 				if (!document.querySelector('#' + device.key + '-' + key)) {
 					document.querySelector('#wrap-' + device.key + '-sensors')
@@ -46,7 +55,7 @@ ws.onmessage = message => {
 		if(device.commands) {
 			device.commands.forEach((command) => {
 				if (!document.querySelector('#' + device.key + '-' + command.id)) {
-					console.log('jupp');
+					//console.log('jupp');
 					document.querySelector('#wrap-' + device.key + '-commands')
 						.appendChild(createElement('div', { 
 							id: device.key + '-' + command.id, 

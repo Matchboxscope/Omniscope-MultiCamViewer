@@ -1,4 +1,4 @@
-const ws = new WebSocket('ws://192.168.0.150:8999');
+const ws = new WebSocket('ws://localhost:8999');
 
 ws.addEventListener('open', (event) => {
 	ws.send(JSON.stringify({

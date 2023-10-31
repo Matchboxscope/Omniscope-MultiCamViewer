@@ -1,15 +1,10 @@
 const WebSocket = require('ws');
-const cocoSsd = require('@tensorflow-models/coco-ssd');
 const fluidb = require('fluidb');
 const fs = require('fs');
-const tf = require('@tensorflow/tfjs-node');
-const MockModel = require('./test/mock-model');
+const path = require('path');
 
-let testMode = true;
 let sensor;
 let command = null;
-const threshold = 0.7;
-const frequency = 20;
 let validEntities = [];
 let counter = 0;
 let initialDataReceived;
@@ -24,7 +19,6 @@ fs.readdir('./images', { withFileTypes: true }, (err, files) => {
 		console.error(err);
 		return;
 	}
-	
 	validEntities = files.filter(file => file.isDirectory()).map(folder => folder.name);
 });
 
@@ -34,7 +28,6 @@ process.on('uncaughtException', (error, origin) => {
 	console.log('----- Exception origin -----');
 	console.log(origin);
 	console.log('----- Status -----');
-	console.table(tf.memory());
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -43,7 +36,6 @@ process.on('unhandledRejection', (reason, promise) => {
 	console.log('----- Reason -----');
 	console.log(reason);
 	console.log('----- Status -----');
-	console.table(tf.memory());
 });
 
 process.on('message', (message) => {
@@ -56,30 +48,43 @@ process.on('message', (message) => {
 		command = message.data;
 		console.log('Command to be executed for', sensor);
 	}
+	else if (message.update === 'snapImage') {
+        saveImage(); 
+    }
 });
 
-async function loadModel(testMode = false) {
-	console.log("loadModel called");
-	if (testMode) {
-		console.log("Using MockModel");
-		return new MockModel();
-	}
-	return await cocoSsd.load();
+// Function to save the image
+function saveImage() {
+    if (sensor && sensor.image) {
+        // Format the current date and time for the filename
+        const timestamp = new Date().toISOString().replace(/[:.-]/g, '_');
+        const filename = `Camera_${sensor.key}_${timestamp}.jpg`;
+        const filepath = path.join(__dirname, 'saved_images', filename);
+
+        // Convert base64 image to binary data
+        const buffer = Buffer.from(sensor.image, 'base64');
+
+        // Write the file to disk
+        fs.writeFile(filepath, buffer, { encoding: null }, (err) => {
+            if (err) {
+                return console.error('Failed to save image:', err);
+            }
+            console.log(`Saved image: ${filename}`);
+        });
+    }
 }
 
 async function main() {
 	await initialDataReceived;
-	
-	const model = await loadModel(testMode);
-	console.log(`AI Model - Done`);
-	console.log('Connection started for', sensor);
-	
 	if (!sensor) {
 		process.exit();
 	}
-	
+	// Save an image every minute
+	setInterval(saveImage, 60000);
+
 	const server = new WebSocket.Server({ port: sensor.port }, () => console.log(`WS Server is listening at ${sensor.port}`));
 	server.on('connection', (ws) => {
+		console.log('Client connected: ' + ws._socket.remoteAddress);
 		ws.on('message', async (data) => {
 			if (ws.readyState !== ws.OPEN) return;
 			
@@ -91,20 +96,6 @@ async function main() {
 			if (typeof data === 'object') {
 				let img = Buffer.from(Uint8Array.from(data)).toString('base64');
 				counter++;
-				if (counter === frequency) {
-					counter = 0;
-					
-					let imgTensor = tf.node.decodeImage(new Uint8Array(data), 3);
-					
-					const predictions = await model.detect(imgTensor);
-					predictions.forEach((prediction) => {
-						console.log(prediction.class + ' - ' + prediction.score);
-						if (validEntities.includes(prediction.class) && prediction.score > threshold) {
-							new fluidb(`./images/${prediction.class}/${Date.now()}`, { 'score': prediction.score, 'img': img, 'bbox': prediction.bbox });
-						}
-					});
-					tf.dispose([imgTensor]);
-				}
 				sensor.image = img;
 			} else {
 				const commandRegex = /\(c:(.*?)\)/g;

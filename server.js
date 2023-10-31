@@ -11,9 +11,9 @@ app.use('/static', express.static(path.join(__dirname, 'public')));
 
 const connectedClients = new Set();
 const HTTP_PORT = 8000;
-const updateFrequency = 150;
+const updateFrequency = 50;
 
-const cores = os.cpus().length;
+const cores = 24;// os.cpus().length;
 
 console.log(`Total CPUs (Logical cores): ${cores}`);
 cluster.setupPrimary({ exec: path.join(__dirname, 'sensor.js') });
@@ -22,7 +22,7 @@ const workers = new Map();
 const sensorsArray = Object.entries(sensors).map(([key, value]) => ({ key, ...value }));
 Object.assign(globalSensorData, Object.fromEntries(sensorsArray.map(sensor => [sensor.key, sensor])));
 
-const sensorsPerWorker = Math.ceil(sensorsArray.length / cores);
+const sensorsPerWorker = 1; // Math.ceil(sensorsArray.length / cores);
 
 for (let i = 0; i < cores; i++) {
 	const workerSensors = sensorsArray.slice(i * sensorsPerWorker, (i + 1) * sensorsPerWorker);
@@ -73,6 +73,7 @@ setInterval(() => {
 
 wss.on('connection', (ws) => {
 	connectedClients.add(ws);
+	console.log('Client connected: ' + ws._socket.remoteAddress);
 	
 	ws.on('message', async (data) => {
 		if (ws.readyState !== ws.OPEN) return;
@@ -90,6 +91,11 @@ wss.on('connection', (ws) => {
 					}
 				}
 			}
+			if (data.operation === 'snapAllCameras') {
+				for (let [worker, _] of workers) {
+					worker.send({ update: 'snapImage' });
+				}
+			}
 		} catch (error) {}
 		
 	});
@@ -99,6 +105,9 @@ wss.on('connection', (ws) => {
 	});
 });
 
+
+
 app.get('/client', (_req, res) => { res.sendFile(path.resolve(__dirname, './public/pages/client1/client.html')); });
 app.get('/client2', (_req, res) => { res.sendFile(path.resolve(__dirname, './public/pages/client2/client.html')); });
+app.get('/client3', (_req, res) => { res.sendFile(path.resolve(__dirname, './public/client.html')); });
 app.listen(HTTP_PORT, () => { console.log(`HTTP server starting on ${HTTP_PORT} with process ID ${process.pid}`); });
