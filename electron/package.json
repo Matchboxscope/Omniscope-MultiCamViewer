@@ -1,0 +1,14 @@
+{
+  "name": "electron-app",
+  "version": "1.0.0",
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "^27.0.2"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "electron-start": "electron ."
+  }
+}
+  

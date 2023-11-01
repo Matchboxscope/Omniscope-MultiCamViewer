@@ -12,9 +12,13 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "electron-start": "electron ."
   },
   "author": "Nomadic Geek",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "electron": "^27.0.2"
+  }
 }
