@@ -3,12 +3,27 @@
   "version": "1.0.0",
   "main": "main.js",
   "devDependencies": {
-    "electron": "^27.0.2"
+    "electron": "^27.0.2",
+    "electron-builder": "^23.0.2"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
     "electron-start": "electron ."
+  },
+  "build": {
+    "appId": "io.github.matchboxscope",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    }
   }
 }
-  

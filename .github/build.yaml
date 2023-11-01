@@ -1,0 +1,33 @@
+name: Build and Release
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '16'
+    
+    - name: Install Dependencies
+      run: npm install
+
+    - name: Build Electron App
+      run: npm run dist
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: app-${{ matrix.os }}
+        path: |
+          dist/*.exe
+          dist/*.dmg
+          dist/*.AppImage
