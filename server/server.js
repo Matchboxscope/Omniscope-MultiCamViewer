@@ -1,13 +1,21 @@
+const FILE_PATH = './sensors.json'; // File path for storing IP addresses
+
 const path = require('path');
 const express = require('express');
 const WebSocket = require('ws');
 const cluster = require('cluster');
 const os = require('os');
 const globalSensorData = require('./global-sensor-data');
-const sensors = require('./sensors.json');
+const sensors = require(FILE_PATH);
+const http = require('http');
+const dgram = require('dgram');
+const bodyParser = require('body-parser');
+const fs = require('fs');
+
 
 const app = express();
 app.use('/static', express.static(path.join(__dirname, 'public')));
+app.use(bodyParser.json());
 
 const connectedClients = new Set();
 const HTTP_PORT = 8000;
@@ -106,8 +114,97 @@ wss.on('connection', (ws) => {
 });
 
 
+// IP Broadcasting 
+const BROADCAST_PORT = 12345;
+const BROADCAST_ADDR = '255.255.255.255';
+
+// Function to get server IP
+function getServerIP() {
+  const ifaces = os.networkInterfaces();
+  let serverIP = '127.0.0.1';
+
+  for (let ifname in ifaces) {
+    ifaces[ifname].forEach(function (iface) {
+      if ('IPv4' !== iface.family || iface.internal !== false) {
+        return;
+      }
+      serverIP = iface.address;
+    });
+  }
+
+  return serverIP;
+}
+
+// Setting up the UDP socket for broadcasting
+const server = dgram.createSocket('udp4');
+
+server.bind(function() {
+    server.setBroadcast(true);
+	console.log(`UDP server listening on ${server.address().address}:${server.address().port}`);
+    setInterval(broadcastIP, 1000); // Broadcast every 5000 ms
+});
+
+function broadcastIP() {
+    let message = Buffer.from(getServerIP());
+    server.send(message, 0, message.length, BROADCAST_PORT, BROADCAST_ADDR, function() {
+        //console.log(`Broadcasting IP address: ${message}`);
+    });
+}
+
+
+
+
+// Handle POST request on /setIP
+app.post('/setIP', (req, res) => {
+    console.log('Received POST request on /setIP');
+	console.log(req.body);
+	const ip = req.body.ip;	
+	const port = req.body.port;
+    if (ip) {
+		console.log(`Received IP/port: ${ip}:${port}`);
+        appendIPToFile(port);
+        res.send({ message: 'IP received and stored' });
+    } else {
+        res.status(400).send({ message: 'Invalid IP' });
+    }
+});
+
+// Append IP to the file
+function appendIPToFile(newPort) {
+	// create a random ID for the new camera
+	const newCamId = Math.floor(Math.random() * 1000);
+    fs.readFile(FILE_PATH, 'utf8', (err, data) => {
+        let sensors = err || !data ? {} : JSON.parse(data);
+
+        // Add new camera if it doesn't already exist
+        if (!sensors[newCamId]) {
+            sensors[newCamId] = {
+                "port": newPort,
+                "class": "cam-instance",
+                "display": `Cam #${Object.keys(sensors).length + 1}`,
+                "commands": [
+                    {
+                        "id": "ON_BOARD_LED",
+                        "name": "Camera flashlight",
+                        "class": "led-light",
+                        "state": 0
+                    }
+                ]
+            };
+        } else {
+            // Update IP if camera already exists
+            sensors[newCamId].port = newPort;
+        }
+
+        fs.writeFile(FILE_PATH, JSON.stringify(sensors, null, 2), (err) => {
+            if (err) throw err;
+            console.log(`New camera ${newCamId} with IP ${newPort} added to ${FILE_PATH}`);
+        });
+    });
+}
 
 app.get('/client', (_req, res) => { res.sendFile(path.resolve(__dirname, './public/pages/client1/client.html')); });
 app.get('/client2', (_req, res) => { res.sendFile(path.resolve(__dirname, './public/pages/client2/client.html')); });
 app.get('/client3', (_req, res) => { res.sendFile(path.resolve(__dirname, './public/client.html')); });
 app.listen(HTTP_PORT, () => { console.log(`HTTP server starting on ${HTTP_PORT} with process ID ${process.pid}`); });
+
