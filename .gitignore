@@ -2,3 +2,4 @@ node_modules/
 *.jsonlock
 package-lock.json
 electron/dist*
+server/saved_images/Camera*

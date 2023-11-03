@@ -11,6 +11,7 @@ export const WebSocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [devices, setDevices] = useState([]);
 
+  
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:8999');
     setSocket(ws);

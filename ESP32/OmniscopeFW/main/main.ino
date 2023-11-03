@@ -11,8 +11,8 @@
 
 #define FLASH_PIN 4
 
-const char *ssid = "Blynk";         // Your wifi name like "myWifiNetwork"
-const char *password = "12345678"; // Your password to the wifi network like "password123"
+const char *ssid = "BenMur";         // Your wifi name like "myWifiNetwork"
+const char *password = "MurBen3128"; // Your password to the wifi network like "password123"
 
 // default values; will be updated
 String websocket_server_host = "192.168.2.191";
@@ -65,13 +65,20 @@ String receiveServerPort()
 
 bool sendPortToServer(String serverIP, int uniquePort, int replyPort)
 {
-  // Now send a POST request to the server 
+  // Now send a POST request to the server
   if (WiFi.status() == WL_CONNECTED)
   {
+    /*
+    curl -X 'POST' \
+  'http://192.168.2.192:8000/setIPPort' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{"ip": "192.168.1.1", "port":8001}'
+  */
     HTTPClient http;
-    http.begin("http://" + serverIP + ":" + String(replyPort) + "/setIP"); // Specify the FastAPI server URL
+    http.begin("http://" + serverIP + ":" + String(replyPort) + "/setIPPort"); // Specify the FastAPI server URL
     http.addHeader("Content-Type", "application/json");
-    String httpRequestData = "{\"ip\":\"" + WiFi.localIP().toString() + ",\"port\":" + String(uniquePort) + "}";
+    String httpRequestData = "{\"ip\":\"" + WiFi.localIP().toString() + "\",\"port\":" + String(uniquePort) + "}";
     Serial.println(httpRequestData);
     int httpResponseCode = http.POST(httpRequestData);
 
@@ -229,6 +236,10 @@ void setup()
   // init the camera
   initCamera();
 
+  // Start Arduino OTA
+  ArduinoOTA.setHostname("esp32-ota");
+  ArduinoOTA.begin(); // Port defaults to 3232
+
   // setup server to control the microscope
   initServer();
 
@@ -239,8 +250,14 @@ void setup()
   client.onMessage(onMessageCallback);
   client.onEvent(onEventsCallback);
   websocket_server_port = uniquePort;
-  while(!client.connect(websocket_server_host, websocket_server_port, "/")) { delay(500); }
-
+  int nConnectionTrial=0;
+  while (!client.connect(websocket_server_host, websocket_server_port, "/"))
+  {
+    nConnectionTrial++;
+    delay(500);
+    if (nConnectionTrial>10)
+      ESP.restart();
+  }
 }
 
 int t0 = 0;
@@ -255,8 +272,11 @@ float computeMeanFrame(uint8_t *data, int len)
   return mean / len;
 }
 
+int frameID = 0;
 void loop()
 {
+  ArduinoOTA.handle();
+  
   // Serial.println("Framerate : " + String(1000 / (1+ millis() - t0)) + " fps");
   t0 = millis();
   client.poll();
@@ -271,11 +291,16 @@ void loop()
     // Serial.println("Camera Capture Failed");
     return;
   }
+  else{
+    Serial.printf("Frame ID %i", frameID);
+    Serial.println("");
+  }
   // Serial.println("Frame Mean: " + String(computeMeanFrame(fb->buf, fb->len)));
 
   client.sendBinary((const char *)fb->buf, fb->len);
   esp_camera_fb_return(fb);
   //  client.send("TEST");
+  frameID ++;
 }
 
 void initServer()

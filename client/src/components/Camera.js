@@ -9,7 +9,7 @@ const Camera = ({ id }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
 
-  const device = devices?.find(device => device.key === id);
+  const device = devices?.find(device => device["display"] === id);
   const isConnected = device && device.image;
 
   const handleZoom = (event) => {

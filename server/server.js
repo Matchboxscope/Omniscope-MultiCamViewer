@@ -21,18 +21,17 @@ const connectedClients = new Set();
 const HTTP_PORT = 8000;
 const updateFrequency = 50;
 
-const cores = 24;// os.cpus().length;
-
-console.log(`Total CPUs (Logical cores): ${cores}`);
 cluster.setupPrimary({ exec: path.join(__dirname, 'sensor.js') });
 const workers = new Map();
 
 const sensorsArray = Object.entries(sensors).map(([key, value]) => ({ key, ...value }));
 Object.assign(globalSensorData, Object.fromEntries(sensorsArray.map(sensor => [sensor.key, sensor])));
 
+// lenghts of sensorArray
+let nCameras = sensorsArray.length;
 const sensorsPerWorker = 1; // Math.ceil(sensorsArray.length / cores);
 
-for (let i = 0; i < cores; i++) {
+for (let i = 0; i < nCameras; i++) {
 	const workerSensors = sensorsArray.slice(i * sensorsPerWorker, (i + 1) * sensorsPerWorker);
 	if (workerSensors.length === 0) continue;
 	
@@ -47,6 +46,8 @@ for (let i = 0; i < cores; i++) {
 	
 	workers.set(worker, workerSensors[0].port);
 }
+
+
 
 cluster.on('exit', (worker) => {
 	console.log(`Worker ${worker.process.pid} killed. Starting new one!`);
@@ -151,56 +152,93 @@ function broadcastIP() {
     });
 }
 
-
+async function handleCamera(port, uniqueCamId) {
+    const currentCameraId = await appendIPToFile(port, uniqueCamId);
+    console.log(`Current camera ID: ${currentCameraId}`);
+    startWorkerForCamera(port, currentCameraId);
+}
 
 
 // Handle POST request on /setIP
-app.post('/setIP', (req, res) => {
+////curl -X 'POST' 'http://192.168.43.235:8000/setIPPort' -H 'accept: application/json' -H 'Content-Type: application/json'  -d '{"ip": "192.168.1.1", "port":8001}'
+app.post('/setIPPort', (req, res) => {
     console.log('Received POST request on /setIP');
 	console.log(req.body);
 	const ip = req.body.ip;	
 	const port = req.body.port;
     if (ip) {
 		console.log(`Received IP/port: ${ip}:${port}`);
-        appendIPToFile(port);
+		const uniqueCamId = port-8000;
+        handleCamera(port, uniqueCamId);
         res.send({ message: 'IP received and stored' });
     } else {
         res.status(400).send({ message: 'Invalid IP' });
     }
 });
 
-// Append IP to the file
-function appendIPToFile(newPort) {
-	// create a random ID for the new camera
-	const newCamId = Math.floor(Math.random() * 1000);
-    fs.readFile(FILE_PATH, 'utf8', (err, data) => {
-        let sensors = err || !data ? {} : JSON.parse(data);
+// Start a new worker for the camera
+function startWorkerForCamera(port, cameraId) {
+    const worker = cluster.fork();
+    worker.send({ update: 'sensor', data: { key: cameraId, port: port, class: 'cam-instance', display: 'Cam#'+String(cameraId), commands: Array(1)} });
 
-        // Add new camera if it doesn't already exist
-        if (!sensors[newCamId]) {
-            sensors[newCamId] = {
-                "port": newPort,
-                "class": "cam-instance",
-                "display": `Cam #${Object.keys(sensors).length + 1}`,
-                "commands": [
-                    {
-                        "id": "ON_BOARD_LED",
-                        "name": "Camera flashlight",
-                        "class": "led-light",
-                        "state": 0
-                    }
-                ]
-            };
-        } else {
-            // Update IP if camera already exists
-            sensors[newCamId].port = newPort;
+    worker.on('message', (message) => {
+        if (message.update === 'sensor') {
+            updateSensors(message.data);
         }
-
-        fs.writeFile(FILE_PATH, JSON.stringify(sensors, null, 2), (err) => {
-            if (err) throw err;
-            console.log(`New camera ${newCamId} with IP ${newPort} added to ${FILE_PATH}`);
-        });
     });
+
+    workers.set(worker, port);
+    console.log(`Started worker for camera ${cameraId} on port ${port}`);
+}
+
+// Restart worker for the existing camera
+function restartWorkerForCamera(cameraId, newPort) {
+    // Find the worker with the old port and kill it
+    for (let [worker, port] of workers) {
+        if (port === newPort) {
+            worker.kill();
+            workers.delete(worker);
+            break;
+        }
+    }
+
+    // Start a new worker with the new port
+    startWorkerForCamera(cameraId, newPort);
+}
+// Append IP to the file
+async function appendIPToFile(newPort, newCamId) {
+    // create a random ID for the new camera
+    console.log("Appending to file");
+    let currentCameraId = 0;
+    let data = await fs.promises.readFile(FILE_PATH, 'utf8');
+    let sensors = !data ? {} : JSON.parse(data);
+    // Add new camera if it doesn't already exist
+    if (!sensors[newCamId]) {
+        currentCameraId = Object.keys(sensors).length + 1;
+        console.log(`New camera ${newCamId} added to ${FILE_PATH}`);
+        sensors[newCamId] = {
+            "port": newPort,
+            "class": "cam-instance",
+            "display": `Cam#${currentCameraId}`,
+            "commands": [
+                {
+                    "id": `${currentCameraId}`,
+                    "name": "Camera flashlight",
+                    "class": "led-light",
+                    "state": 0
+                }
+            ]
+        };
+    } else {
+        currentCameraId = Object.keys(sensors).length;
+        console.log(`Camera ${newCamId} already exists in ${FILE_PATH}`);
+        // Update IP if camera already exists
+        sensors[newCamId].port = newPort;
+    }
+    // Write to file
+    await fs.promises.writeFile(FILE_PATH, JSON.stringify(sensors, null, 2));
+    console.log(`New camera ${newCamId} with IP ${newPort} added to ${FILE_PATH}`);
+    return currentCameraId;
 }
 
 app.get('/client', (_req, res) => { res.sendFile(path.resolve(__dirname, './public/pages/client1/client.html')); });

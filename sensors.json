@@ -1,0 +1,15 @@
+{
+  "742": {
+    "port": 8742,
+    "class": "cam-instance",
+    "display": "Cam#1",
+    "commands": [
+      {
+        "id": "1",
+        "name": "Camera flashlight",
+        "class": "led-light",
+        "state": 0
+      }
+    ]
+  }
+}
