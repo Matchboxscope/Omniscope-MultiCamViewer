@@ -4,7 +4,7 @@
   "main": "main.js",
   "devDependencies": {
     "electron": "^27.0.2",
-    "electron-builder": "^23.0.2"
+    "electron-builder": "^23.6.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -25,5 +25,8 @@
       "target": "nsis",
       "icon": "icon.ico"
     }
+  },
+  "dependencies": {
+    "electron-is-dev": "^2.0.0"
   }
 }

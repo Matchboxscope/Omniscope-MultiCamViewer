@@ -13,16 +13,14 @@ function CameraGrid() {
     Array.from({ length: 24 }, (_, index) => ({
       id: `Cam#${index + 1}`,
       connected: false,
-      stream: null, // You can add more properties as needed
+      stream: null, // Will be updated with the stream
     }))
   );
 
+  // will be updated when devices gets updated
   useEffect(() => {
     // Map over the existing camera slots and update them if a camera is connected
     const updatedCameraSlots = cameraSlots.map((slot) => {
-      if (devices.length>0){
-        console.log(devices[0].key)
-      }
       const deviceInfo = devices.find((device) => `Cam#${device.key}` === slot.id);
       return deviceInfo
         ? { ...slot, connected: true, stream: deviceInfo.stream } // Update with camera info

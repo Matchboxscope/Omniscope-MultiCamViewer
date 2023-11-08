@@ -1,18 +1,36 @@
 #include "esp_camera.h"
 #include <WiFi.h>
 #include <ArduinoWebsockets.h>
-#define CAMERA_MODEL_AI_THINKER
 #include <stdio.h>
 #include "camera_pins.h"
 #include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoOTA.h>
 #include <Preferences.h>
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <Arduino.h>
+#include <esp_task_wdt.h>
+#include "BluetoothSerial.h"
+
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
+#endif
+
+// Task handle for the BLE task
+TaskHandle_t bleClientTaskHandle;
+
+// BLE UUIDs
+#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"        // Custom Service UUID
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8" // Custom Characteristic UUID
 
 #define FLASH_PIN 4
 
-const char *ssid = "BenMur";         // Your wifi name like "myWifiNetwork"
-const char *password = "MurBen3128"; // Your password to the wifi network like "password123"
+const char *ssid = "omniscope";        // Your wifi name like "myWifiNetwork"
+const char *password = "omniscope"; // Your password to the wifi network like "password123"
+String ssidB = ""; // side-loaded SSID from Bluetooth
+String passwordB = ""; // side-loaded password from Bluetooth
 
 // default values; will be updated
 String websocket_server_host = "192.168.2.191";
@@ -31,6 +49,9 @@ int flashlight = 0;
 using namespace websockets;
 WebsocketsClient client;
 
+#ifdef BT
+BluetoothSerial SerialBT;
+#endif 
 String receiveServerPort()
 {
   // read the server IP address
@@ -220,8 +241,19 @@ void setup()
 {
   Serial.begin(115200);
 
+  // try loading the wifi ssid/password form the preferences
+  preferences.begin("network", false);
+  
+  // Get stored SSID and Password
+  ssidB = preferences.getString("ssid", ""); // If there is no saved SSID, return an empty string
+  passwordB = preferences.getString("password", ""); // If there is no saved password, return an empty string
+  
   // connect to the Wifi
-  WiFi.begin(ssid, password);
+  if(ssidB != "" && passwordB != "") {
+    WiFi.begin(ssidB.c_str(), passwordB.c_str());
+  } else {
+    WiFi.begin(ssid, password);
+  }
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
@@ -230,18 +262,24 @@ void setup()
   uint16_t uniqueID = createUniqueID();
   uint16_t uniquePort = 8000 + uniqueID;
 
+  // start bluetooth
+  #ifdef BT
+  SerialBT.begin("ESP32_BT"+String(uniqueID)); // Start Bluetooth with the name "ESP32_BT"
+  Serial.println("The device started, now you can pair it with Bluetooth!");
+  #endif
+  // init the camera
+  initCamera();
+
+  // setup server to control the microscope
+  initServer();
+
   // receive the server IP address
   websocket_server_host = receiveServerPort();
   Serial.println("Server IP: " + String(websocket_server_host));
-  // init the camera
-  initCamera();
 
   // Start Arduino OTA
   ArduinoOTA.setHostname("esp32-ota");
   ArduinoOTA.begin(); // Port defaults to 3232
-
-  // setup server to control the microscope
-  initServer();
 
   // reply with the unique camera port/ID
   sendPortToServer(websocket_server_host, uniquePort, replyPort);
@@ -250,13 +288,28 @@ void setup()
   client.onMessage(onMessageCallback);
   client.onEvent(onEventsCallback);
   websocket_server_port = uniquePort;
-  int nConnectionTrial=0;
+  int nConnectionTrial = 0;
   while (!client.connect(websocket_server_host, websocket_server_port, "/"))
   {
     nConnectionTrial++;
     delay(500);
-    if (nConnectionTrial>10)
+    if (nConnectionTrial > 10)
       ESP.restart();
+  }
+
+  // announce the BLE service to receive Wifi credentials if needed
+  // Create and start the BLE client task
+  if (0)
+  {
+    xTaskCreatePinnedToCore(
+        bleClientTask,        /* Task function. */
+        "BLEClientTask",      /* Name of the task. */
+        10000,                /* Stack size of the task */
+        NULL,                 /* Parameter of the task */
+        1,                    /* Priority of the task */
+        &bleClientTaskHandle, /* Task handle */
+        0                     /* Core where the task should run */
+    );
   }
 }
 
@@ -276,7 +329,36 @@ int frameID = 0;
 void loop()
 {
   ArduinoOTA.handle();
-  
+
+  #ifdef BT
+  // if available, receive bluetooth SSID/password
+  if (SerialBT.available()) {
+    String command = SerialBT.readStringUntil('\n');
+    String ssidB = "";
+    String passwordB = "";
+    // You may want to add more sophisticated command parsing here
+    if (command.startsWith("SSID:")) {
+      ssidB = command.substring(5); // Assumes the command is in the form "SSID:yourSSID"
+      Serial.println("SSID received: " + ssidB);
+      preferences.putString("ssid", ssidB);
+    } else if (command.startsWith("PASS:")) {
+      passwordB = command.substring(5); // Assumes the command is in the form "PASS:yourPassword"
+      Serial.println("Password received: " + passwordB);
+      preferences.putString("password", passwordB);
+      
+      // Once you have both SSID and password, you can connect to the Wi-Fi
+      WiFi.begin(ssidB.c_str(), passwordB.c_str());
+      
+      while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+      }
+      Serial.println("");
+      Serial.println("WiFi connected.");
+    }
+  }
+  #endif
+
   // Serial.println("Framerate : " + String(1000 / (1+ millis() - t0)) + " fps");
   t0 = millis();
   client.poll();
@@ -291,7 +373,8 @@ void loop()
     // Serial.println("Camera Capture Failed");
     return;
   }
-  else{
+  else
+  {
     Serial.printf("Frame ID %i", frameID);
     Serial.println("");
   }
@@ -300,7 +383,7 @@ void loop()
   client.sendBinary((const char *)fb->buf, fb->len);
   esp_camera_fb_return(fb);
   //  client.send("TEST");
-  frameID ++;
+  frameID++;
 }
 
 void initServer()
@@ -317,10 +400,8 @@ void initServer()
     if (request->hasParam("server")) {
       String serverIP = request->getParam("server")->value();
       log_d("Server IP: %s", serverIP.c_str());
-
-      preferences.begin("network", false);
       preferences.putString("wshost", serverIP);
-      preferences.end();
+
       message = "{\"success\":\"server IP updated\"}";
       request->send(200, "application/json", message);
 
@@ -343,10 +424,7 @@ void initServer()
       String uidStr = request->getParam("uid")->value(); // Get the uid as a String
       int uid = uidStr.toInt();                         // Convert the String to an integer
       Serial.println(uid);
-
-      preferences.begin("network", false);
       preferences.putInt("uid", uid);
-      preferences.end();
 
       message = "{\"success\":\"Unique ID updated\"}";
       request->send(200, "application/json", message);
@@ -442,9 +520,63 @@ void initServer()
             {
     String message = "{\"id\":\"" + String(1) + "\"}";
     request->send(200, "application/json", message);
-    preferences.begin("network", false);
     preferences.clear();
-    preferences.end();
     ESP.restart(); });
   server.begin();
+}
+
+void connectToServer(BLEAddress pAddress)
+{
+  BLEClient *pClient = BLEDevice::createClient();
+  pClient->connect(pAddress);
+
+  BLERemoteService *pRemoteService = pClient->getService(BLEUUID(SERVICE_UUID));
+  if (pRemoteService != nullptr)
+  {
+    BLERemoteCharacteristic *pRemoteCharacteristic = pRemoteService->getCharacteristic(BLEUUID(CHARACTERISTIC_UUID));
+    if (pRemoteCharacteristic != nullptr)
+    {
+      std::string value = pRemoteCharacteristic->readValue();
+      Serial.print("Read IP: ");
+      Serial.println(value.c_str());
+    }
+  }
+  pClient->disconnect();
+}
+
+void bleClientTask(void *pvParameter)
+{
+  Serial.print("BLE Client Task running on core ");
+  Serial.println(xPortGetCoreID());
+
+  // Initialize BLE
+  BLEDevice::init("");
+
+  BLEScan *pBLEScan = BLEDevice::getScan();
+  pBLEScan->setActiveScan(true);
+  for (;;)
+  {
+    BLEScanResults foundDevices = pBLEScan->start(5);
+    bool deviceFound = false;
+    for (int i = 0; i < foundDevices.getCount() && !deviceFound; i++)
+    {
+      BLEAdvertisedDevice device = foundDevices.getDevice(i);
+      if (device.haveServiceUUID() && device.getServiceUUID().equals(BLEUUID(SERVICE_UUID)))
+      {
+        Serial.println("Found our device! Connecting...");
+        connectToServer(device.getAddress());
+        deviceFound = true;
+      }
+    }
+    if (!deviceFound)
+    {
+      Serial.println("Device not found. Scanning again...");
+    }
+    // Reset the watchdog timer to prevent the watchdog error
+    esp_task_wdt_reset();
+
+    // Wait for a specified time or until an event occurs
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    // vTaskDelay(10000 / portTICK_PERIOD_MS); // Wait for 10 seconds before next scan
+  }
 }

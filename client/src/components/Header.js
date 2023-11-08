@@ -10,13 +10,38 @@ const Header = () => {
     sendMessage({ operation: 'snapAllCameras' });
   };
 
+  const handleFocusPlus = () => {
+    sendMessage({ operation: 'focusPlus' });
+  }
+  
+  const handleFocusMinus = () => {
+    sendMessage({ operation: 'focusMinus' });
+  }
+
+  const handleTimelapseStart = () => {
+    sendMessage({ operation: 'timelapseStart' });
+  }
+
+  const handleTimelapseStop = () => {
+    sendMessage({ operation: 'timelapseStop' });
+  }
+
+  const handleReloadCameras = () => {
+    sendMessage({ operation: 'reloadCameras' });
+  }
+
+  const handleResetAllCameras = () => {
+    sendMessage({ operation: 'resetAllCameras' });
+  }
+
+
   // Add functions for other buttons and inputs similarly
 
   return (
     <AppBar position="static">
     <Toolbar>
       <img src="https://avatars.githubusercontent.com/u/4345528?v=4" alt="Omniscope" width="50" height="50" />
-      <Button color="inherit">Snap All</Button>
+      <Button color="inherit" onClick={handleSnapAll}>Snap All</Button>
       <Button color="inherit">+ Focus</Button>
       <Button color="inherit">- Focus</Button>
       <TextField
@@ -28,22 +53,10 @@ const Header = () => {
       />
       <Button color="inherit">Start Timelapse</Button>
       <Button color="inherit">Stop Timelapse</Button>
+      <Button color="inherit" onClick={handleReloadCameras}>Reload Cameras</Button>
     </Toolbar>
   </AppBar>
   );
 };
-/*
-</AppBar>
-    <AppBar position="static">
-      <Toolbar>
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          Camera Control Panel
-        </Typography>
-        <Button color="inherit" onClick={handleSnapAll}>Snap All</Button>
-
-        </Toolbar>
-        </AppBar>
-        */
-
 export default Header;
 

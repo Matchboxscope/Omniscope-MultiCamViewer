@@ -13,7 +13,20 @@ export const WebSocketProvider = ({ children }) => {
 
   
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8999');
+    const location = window.location;
+    let wsUrl;
+
+    if (location.protocol === 'https:') {
+        wsUrl = 'wss:';
+    } else {
+        wsUrl = 'ws:';
+    }
+
+    wsUrl += `//${location.hostname}:8999`;
+
+    console.log(wsUrl);
+    const ws = new WebSocket(wsUrl);
+
     setSocket(ws);
 
     ws.onopen = () => {

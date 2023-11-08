@@ -21,9 +21,7 @@ ws.onmessage = message => {
 				.appendChild(createElement('img',{ id:'img-' + device }));
 			document.querySelector('#'+device)
 				.appendChild(createElement('div',{ id:'wrap-' + device + '-sensors', class:'sensors-wrapper-' + md.devices[device].view }));
-			document.querySelector('#'+device)
-				.appendChild(createElement('div',{ id:'wrap-' + device + '-commands', class:'commands-wrapper-' + md.devices[device].view }));
-		}
+			
 		
 		if (md.devices[device].image) {
 			document.querySelector('#img-' + device).src = "data:image/jpeg;base64," + md.devices[device].image;
@@ -44,15 +42,6 @@ ws.onmessage = message => {
 		md.devices[device].commands.forEach((command) => {
 			if (command !== undefined && !document.querySelector('#' + device + '-' + command.id)) {
 				console.log(command);
-				document.querySelector('#wrap-' + device + '-commands')
-					.appendChild(createElement('div', { 
-						id: device + '-' + command.id, 
-						class: 'command-button'
-				})).appendChild(createElement('div',{ 
-					id: device + '-' + command.id + '-state', class: command.class, 
-					'data-state': command.state
-				}));
-
 				document.querySelector('#' + device + '-' + command.id).addEventListener('click', function(e) {
 					ws.send(JSON.stringify({
 						'client' : '8999',

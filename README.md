@@ -7,7 +7,7 @@ in your terminal, write
 npm install
 ```
 
-for the REACT app 
+for the Omniscope APP 
 
 ```
 cd 
@@ -46,3 +46,15 @@ npm install
 npm run
 ```
 
+## Electron
+
+```bash
+cd electron
+npm run electron-start
+````
+``
+```bash
+npm install --save-dev electron-builder
+npm run dist -- -w
+npm run dist -- -m
+```

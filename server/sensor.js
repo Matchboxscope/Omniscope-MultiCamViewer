@@ -14,7 +14,13 @@ initialDataReceived = new Promise((resolve) => {
 	resolveInitialData = resolve;
 });
 
-fs.readdir('./images', { withFileTypes: true }, (err, files) => {
+
+const imagesPath = path.join(__dirname, 'images');
+if (!fs.existsSync(imagesPath)) {
+	fs.mkdirSync(imagesPath);
+}
+
+fs.readdir(imagesPath, { withFileTypes: true }, (err, files) => {
 	if (err) {
 		console.error(err);
 		return;
@@ -59,8 +65,11 @@ function saveImage() {
         // Format the current date and time for the filename
         const timestamp = new Date().toISOString().replace(/[:.-]/g, '_');
         const filename = `Camera_${sensor.key}_${timestamp}.jpg`;
-        const filepath = path.join(__dirname, 'saved_images', filename);
-
+		const folderpath = path.join(__dirname, 'saved_images');
+        const filepath = path.join(folderpath, filename);
+		if (!fs.existsSync(folderpath)) {
+			fs.mkdirSync(folderpath);
+		}
         // Convert base64 image to binary data
         const buffer = Buffer.from(sensor.image, 'base64');
 

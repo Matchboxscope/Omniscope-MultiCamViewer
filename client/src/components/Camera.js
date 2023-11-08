@@ -12,7 +12,7 @@ const Camera = ({ id }) => {
   const device = devices?.find(device => device["display"] === id);
   const isConnected = device && device.image;
 
-  const handleZoom = (event) => {
+  const handleZoom = (event) => { 
     setZoomLevel(prevZoom => Math.max(1, prevZoom + event.deltaY * -0.01));
   };
 

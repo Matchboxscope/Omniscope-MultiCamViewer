@@ -1,2 +1,44 @@
 {
+  "6": {
+    "port": 8006,
+    "class": "cam-instance",
+    "display": "Cam#7",
+    "id": "7"
+  },
+  "65": {
+    "port": 8065,
+    "class": "cam-instance",
+    "display": "Cam#6",
+    "id": "6"
+  },
+  "379": {
+    "port": 8379,
+    "class": "cam-instance",
+    "display": "Cam#4",
+    "id": "4"
+  },
+  "613": {
+    "port": 8613,
+    "class": "cam-instance",
+    "display": "Cam#3",
+    "id": "3"
+  },
+  "615": {
+    "port": 8615,
+    "class": "cam-instance",
+    "display": "Cam#1",
+    "id": "1"
+  },
+  "633": {
+    "port": 8633,
+    "class": "cam-instance",
+    "display": "Cam#5",
+    "id": "5"
+  },
+  "742": {
+    "port": 8742,
+    "class": "cam-instance",
+    "display": "Cam#2",
+    "id": "2"
+  }
 }

@@ -32,8 +32,6 @@ ws.onmessage = message => {
 			}
 			document.querySelector('#'+device.key)
 				.appendChild(createElement('div',{ id:'wrap-' + device.key + '-sensors', class:'sensors-wrapper-' + device.view }));
-			document.querySelector('#'+device.key)
-				.appendChild(createElement('div',{ id:'wrap-' + device.key + '-commands', class:'commands-wrapper-' + device.view }));
 		}
 		
 		if (device.image) {
@@ -56,14 +54,6 @@ ws.onmessage = message => {
 			device.commands.forEach((command) => {
 				if (!document.querySelector('#' + device.key + '-' + command.id)) {
 					//console.log('jupp');
-					document.querySelector('#wrap-' + device.key + '-commands')
-						.appendChild(createElement('div', { 
-							id: device.key + '-' + command.id, 
-							class: 'command-button'
-					})).appendChild(createElement('div',{ 
-						id: device.key + '-' + command.id.toLowerCase() + '-state', class: command.class, 
-						'data-state': command.state
-					}));
 	
 					document.querySelector('#' + device.key + '-' + command.id.toLowerCase()).addEventListener('click', function(e) {
 						ws.send(JSON.stringify({
