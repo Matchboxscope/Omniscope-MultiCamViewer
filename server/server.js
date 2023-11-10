@@ -33,24 +33,25 @@ Object.assign(
 );
 
 // lenghts of sensorArray
+/*
 let nCameras = sensorsArray.length;
 const sensorsPerWorker = 1; // Math.ceil(sensorsArray.length / cores);
 
-/*
+
 for (let i = 0; i < nCameras; i++) {
-	const workerSensors = sensorsArray.slice(i * sensorsPerWorker, (i + 1) * sensorsPerWorker);
-	if (workerSensors.length === 0) continue;
+  const workerSensors = sensorsArray.slice(i * sensorsPerWorker, (i + 1) * sensorsPerWorker);
+  if (workerSensors.length === 0) continue;
 	
-	const worker = cluster.fork();
-	worker.send({ update: 'sensor', data: workerSensors[0] });
+  const worker = cluster.fork();
+  worker.send({ update: 'sensor', data: workerSensors[0] });
 	
-	worker.on('message', (message) => {
-		if (message.update === 'sensor') {
-			updateSensors(message.data);
-		}
-	});
+  worker.on('message', (message) => {
+    if (message.update === 'sensor') {
+      updateSensors(message.data);
+    }
+  });
 	
-	workers.set(worker, workerSensors[0].port, i);
+  workers.set(worker, workerSensors[0].port, i);
 }
 */
 
@@ -150,8 +151,8 @@ wss.on("connection", (ws) => {
         // we need to delete the sensors.json file and restart the server
         console.log("Resetting all cameras");
         fs.writeFile(FILE_PATH, JSON.stringify([]), function (err) {
-            if (err) throw err;
-            console.log("File cleared!");
+          if (err) throw err;
+          console.log("File cleared!");
         });
         // kill all workers
         for (let [worker, _, __] of workers) {
@@ -159,7 +160,37 @@ wss.on("connection", (ws) => {
           workers.delete(worker);
         }
       }
-    } catch (error) {}
+
+      if (data.operation === "stageMoveUp"){
+        // we need to send a message to the stage worker to move the stage up
+        console.log("Moving stage up");
+        const stageWorker = [...workers.entries()].find(
+          ([, port]) => port === data.port
+        )?.[0]; 
+        if (stageWorker) {
+          stageWorker.send({
+            update: "stage",
+            data: 50,
+          });
+        }
+      }
+
+      if (data.operation === "stageMoveDown"){
+        // we need to send a message to the stage worker to move the stage up
+        console.log("Moving stage down");
+        const stageWorker = [...workers.entries()].find(
+          ([, port]) => port === data.port
+        )?.[0]; 
+        if (stageWorker) {
+          stageWorker.send({
+            update: "stage",
+            data: -50,
+          });
+        }
+      }
+
+      
+    } catch (error) { }
   });
 
   ws.on("close", () => {
@@ -196,8 +227,7 @@ const server = dgram.createSocket("udp4");
 server.bind(function () {
   server.setBroadcast(true);
   console.log(
-    `UDP server listening on ${server.address().address}:${
-      server.address().port
+    `UDP server listening on ${server.address().address}:${server.address().port
     }`
   );
   setInterval(broadcastIP, 1000); // Broadcast every 5000 ms
@@ -223,6 +253,12 @@ async function handleCamera(port, uniqueCamId) {
   startWorkerForCamera(port, currentCameraId);
 }
 
+async function handleStage(port, uniqueStageId) {
+  const currentStageId = await appendIPToFile(port, uniqueStageId);
+  console.log(`Current stage ID: ${currentStageId}`);
+  startWorkerForStage(port, currentStageId);
+}
+
 // Handle POST request on /setIP
 ////curl -X 'POST' 'http://192.168.43.235:8000/setIPPort' -H 'accept: application/json' -H 'Content-Type: application/json'  -d '{"ip": "192.168.1.1", "port":8001}'
 app.post("/setIPPort", (req, res) => {
@@ -233,8 +269,14 @@ app.post("/setIPPort", (req, res) => {
   if (ip) {
     console.log(`Received IP/port: ${ip}:${port}`);
     const uniqueCamId = port - 8000;
-    handleCamera(port, uniqueCamId);
-    res.send({ message: "IP received and stored" });
+    if (uniqueCamId < 0) { // stage will have a negative ID
+      handleStage(port, uniqueCamId);
+      res.send({ message: "IP received and stored" });
+    }
+    else {
+      handleCamera(port, uniqueCamId);
+      res.send({ message: "IP received and stored" });
+    }
   } else {
     res.status(400).send({ message: "Invalid IP" });
   }
@@ -276,6 +318,45 @@ function startWorkerForCamera(port, cameraId) {
   workers.set(worker, port, cameraId);
   console.log(`Started worker for camera ${cameraId} on port ${port}`);
 }
+
+// Start a new worker for the stage
+function startWorkerForStage(port, stageId) {
+  // if workers has port/cameraID of the new incoming one, kill the one with same port/cameraID
+  const isPortInWorkers = Array.from(workers.values()).some(
+    (workerPort) => workerPort === port
+  );
+
+  if (isPortInWorkers) {
+    for (let [worker, oldport] of workers) {
+      if (oldport === port) {
+        worker.kill();
+        workers.delete(worker);
+        break;
+      }
+    }
+  }
+  const worker = cluster.fork();
+  worker.send({
+    update: "stage",
+    data: {
+      key: stageId,
+      port: port,
+      class: "stage-instance",
+      display: "Stage#" + String(stageId),
+    },
+  });
+
+  worker.on("message", (message) => {
+    if (message.update === "stage") {
+      //updateSensors(message.data);
+      console.log("Stage message received: " + message.data);
+    }
+  });
+
+  workers.set(worker, port, stageId);
+  console.log(`Started worker for stage ${stageId} on port ${port}`);
+}
+
 
 // Append IP to the file
 async function appendIPToFile(newPort, newCamId) {
