@@ -1,16 +1,27 @@
-const FILE_PATH = "./sensors.json"; // File path for storing IP addresses
-
 const path = require("path");
 const express = require("express");
 const WebSocket = require("ws");
 const cluster = require("cluster");
 const os = require("os");
 const globalSensorData = require("./global-sensor-data");
-const sensors = require(FILE_PATH);
+
 const http = require("http");
 const dgram = require("dgram");
 const bodyParser = require("body-parser");
 const fs = require("fs");
+
+// Load the sensor configurations if available
+const FILE_PATH = "sensors.json"; // Specify the path to your JSON file
+let sensors;
+try {
+  // Try to read the JSON file
+  sensors = require(path.resolve(FILE_PATH));
+} catch (err) {
+  // If the file does not exist or is not valid JSON, initialize with an empty object
+  sensors = {};
+  fs.writeFileSync(FILE_PATH, JSON.stringify(sensors));
+}
+
 
 const app = express();
 app.use("/static", express.static(path.join(__dirname, "public")));
@@ -161,12 +172,12 @@ wss.on("connection", (ws) => {
         }
       }
 
-      if (data.operation === "stageMoveUp"){
+      if (data.operation === "stageMoveUp") {
         // we need to send a message to the stage worker to move the stage up
         console.log("Moving stage up");
         const stageWorker = [...workers.entries()].find(
           ([, port]) => port === data.port
-        )?.[0]; 
+        )?.[0];
         if (stageWorker) {
           stageWorker.send({
             update: "stage",
@@ -175,12 +186,12 @@ wss.on("connection", (ws) => {
         }
       }
 
-      if (data.operation === "stageMoveDown"){
+      if (data.operation === "stageMoveDown") {
         // we need to send a message to the stage worker to move the stage up
         console.log("Moving stage down");
         const stageWorker = [...workers.entries()].find(
           ([, port]) => port === data.port
-        )?.[0]; 
+        )?.[0];
         if (stageWorker) {
           stageWorker.send({
             update: "stage",
@@ -189,7 +200,7 @@ wss.on("connection", (ws) => {
         }
       }
 
-      
+
     } catch (error) { }
   });
 
@@ -205,36 +216,64 @@ const BROADCAST_PORT = 12345;
 const BROADCAST_ADDR = "255.255.255.255";
 
 // Function to get server IP
-function getServerIP() {
+function getServerIP(desiredInterfaceName) {
   const ifaces = os.networkInterfaces();
+  // get all names of the ifaces
   let serverIP = "127.0.0.1";
 
   for (let ifname in ifaces) {
-    ifaces[ifname].forEach(function (iface) {
-      if ("IPv4" !== iface.family || iface.internal !== false) {
-        return;
+    if (ifname === desiredInterfaceName) {
+      const iface = ifaces[ifname].find((iface) => iface.family === "IPv4" && !iface.internal);
+      if (iface) {
+        serverIP = iface.address;
+        //console.log(`Server IP: ${serverIP}`);
+        break; // Found the desired interface, exit the loop
       }
-      serverIP = iface.address;
-    });
+    }
   }
 
   return serverIP;
 }
 
-// Setting up the UDP socket for broadcasting
-const server = dgram.createSocket("udp4");
+// Function to get the desired network interface's local address
+function getDesiredNetworkInterfaceAddress(desiredInterfaceName) {
+  const ifaces = os.networkInterfaces();
 
-server.bind(function () {
+  for (let ifname in ifaces) {
+    if (ifname === desiredInterfaceName) {
+      const iface = ifaces[ifname].find(
+        (iface) => iface.family === "IPv4" && !iface.internal
+      );
+      if (iface) {
+        return iface.address;
+      }
+    }
+  }
+
+  return "0.0.0.0"; // Default to binding to all interfaces if not found
+}
+
+// Specify the desired network interface name
+const desiredInterfaceName = "Wi-Fi"; // Replace with the actual interface name
+
+// Create a UDP socket bound to the desired network interface's local address
+const server = dgram.createSocket("udp4");
+server.bind({
+  address: getDesiredNetworkInterfaceAddress(desiredInterfaceName),
+  port: 0, // Let the OS choose an available port
+});
+
+server.on("listening", function () {
   server.setBroadcast(true);
   console.log(
-    `UDP server listening on ${server.address().address}:${server.address().port
-    }`
+    `UDP server listening on ${server.address().address}:${server.address().port}`
   );
-  setInterval(broadcastIP, 1000); // Broadcast every 5000 ms
+  setInterval(broadcastIP, 1000); // Broadcast every 1000 ms
 });
 
 function broadcastIP() {
-  let message = Buffer.from(getServerIP());
+  const message = Buffer.from(getServerIP(desiredInterfaceName));
+  // console.log(`Broadcasting IP address: ${message}`);
   server.send(
     message,
     0,
@@ -242,7 +281,7 @@ function broadcastIP() {
     BROADCAST_PORT,
     BROADCAST_ADDR,
     function () {
-      //console.log(`Broadcasting IP address: ${message}`);
+      // Broadcast callback
     }
   );
 }
