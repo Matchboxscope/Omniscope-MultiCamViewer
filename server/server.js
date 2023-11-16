@@ -253,9 +253,26 @@ function getDesiredNetworkInterfaceAddress(desiredInterfaceName) {
   return "0.0.0.0"; // Default to binding to all interfaces if not found
 }
 
-// Specify the desired network interface name
-const desiredInterfaceName = "Wi-Fi"; // Replace with the actual interface name
 
+let desiredInterfaceName;
+
+switch(os.platform()) {
+    case 'win32':
+        // Windows
+        desiredInterfaceName = 'Wi-Fi';
+        break;
+    case 'darwin':
+        // MacOS
+        desiredInterfaceName = 'en0'; // This might change based on your system
+        break;
+    case 'linux':
+        // Linux
+        desiredInterfaceName = 'wlan0'; // This might change based on your system
+        break;
+    default:
+        console.log('Unsupported platform');
+        break;
+}
 // Create a UDP socket bound to the desired network interface's local address
 const server = dgram.createSocket("udp4");
 server.bind({
