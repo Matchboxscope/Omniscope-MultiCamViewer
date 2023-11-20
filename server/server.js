@@ -256,6 +256,7 @@ function getDesiredNetworkInterfaceAddress(desiredInterfaceName) {
   return "0.0.0.0"; // Default to binding to all interfaces if not found
 }
 
+
 let desiredInterfaceName;
 
 switch(os.platform()) {
