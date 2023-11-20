@@ -1,3 +1,5 @@
+// if you use docker: sudo pkill docker-pr
+// check ports: sudo lsof -iTCP -sTCP:LISTEN
 const path = require("path");
 const express = require("express");
 const WebSocket = require("ws");
@@ -26,6 +28,7 @@ try {
 const app = express();
 app.use("/static", express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, '../client/build')));
 
 const connectedClients = new Set();
 const HTTP_PORT = 8000;
@@ -253,9 +256,25 @@ function getDesiredNetworkInterfaceAddress(desiredInterfaceName) {
   return "0.0.0.0"; // Default to binding to all interfaces if not found
 }
 
-// Specify the desired network interface name
-const desiredInterfaceName = "Wi-Fi"; // Replace with the actual interface name
+let desiredInterfaceName;
 
+switch(os.platform()) {
+    case 'win32':
+        // Windows
+        desiredInterfaceName = 'Wi-Fi';
+        break;
+    case 'darwin':
+        // MacOS
+        desiredInterfaceName = 'en0'; // This might change based on your system
+        break;
+    case 'linux':
+        // Linux
+        desiredInterfaceName = 'wlan0'; // This might change based on your system
+        break;
+    default:
+        console.log('Unsupported platform');
+        break;
+}
 // Create a UDP socket bound to the desired network interface's local address
 const server = dgram.createSocket("udp4");
 server.bind({
@@ -299,7 +318,7 @@ async function handleStage(port, uniqueStageId) {
 }
 
 // Handle POST request on /setIP
-////curl -X 'POST' 'http://192.168.43.235:8000/setIPPort' -H 'accept: application/json' -H 'Content-Type: application/json'  -d '{"ip": "192.168.1.1", "port":8001}'
+////curl -X 'POST' 'http://192.168.0.116:8000/setIPPort' -H 'accept: application/json' -H 'Content-Type: application/json'  -d '{"ip": "192.168.1.1", "port":8001}'
 app.post("/setIPPort", (req, res) => {
   console.log("Received POST request on /setIP");
   console.log(req.body);
@@ -430,15 +449,15 @@ async function appendIPToFile(newPort, newCamId) {
   return currentCameraId;
 }
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+});
+
+// send a simple test response if the server is up and running
 app.get("/client", (_req, res) => {
-  res.sendFile(path.resolve(__dirname, "./public/pages/client1/client.html"));
+  res.send("Server is up and running!");
 });
-app.get("/client2", (_req, res) => {
-  res.sendFile(path.resolve(__dirname, "./public/pages/client2/client.html"));
-});
-app.get("/client3", (_req, res) => {
-  res.sendFile(path.resolve(__dirname, "./public/client.html"));
-});
+
 app.listen(HTTP_PORT, () => {
   console.log(
     `HTTP server starting on ${HTTP_PORT} with process ID ${process.pid}`
