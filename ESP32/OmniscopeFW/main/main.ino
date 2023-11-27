@@ -1,39 +1,36 @@
+#ifdef CAMERA_MODEL_XIAO
 #include "esp_camera.h"
+#endif 
+#include "camera_pins.h"
+
 #include <WiFi.h>
 #include <ArduinoWebsockets.h>
 #include <stdio.h>
-#include "camera_pins.h"
+
 #include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoOTA.h>
 #include <Preferences.h>
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEScan.h>
 #include <Arduino.h>
 #include <esp_task_wdt.h>
-#include "BluetoothSerial.h"
+#include <Adafruit_NeoPixel.h>
+#include "AccelStepper.h"
 
-#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
-#error Bluetooth is not enabled! Please run `make menuconfig` to and enable it
-#endif
 
-// Task handle for the BLE task
-TaskHandle_t bleClientTaskHandle;
+// Illumination related
+Adafruit_NeoPixel pixels(NUMPIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
-// BLE UUIDs
-#define SERVICE_UUID "4fafc201-1fb5-459e-8fcc-c5c9c331914b"        // Custom Service UUID
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8" // Custom Characteristic UUID
+// Stepper-related
+AccelStepper motor(1, STEPPER_MOTOR_STEP, STEPPER_MOTOR_DIR);
+void moveFocusRelative(int steps, bool handleEnable);
 
-#define FLASH_PIN 4
-
-const char *ssid = "omniscope";        // Your wifi name like "myWifiNetwork"
+const char *ssid = "omniscope";     // Your wifi name like "myWifiNetwork"
 const char *password = "omniscope"; // Your password to the wifi network like "password123"
-String ssidB = ""; // side-loaded SSID from Bluetooth
-String passwordB = ""; // side-loaded password from Bluetooth
+String ssidB = "";                  // side-loaded SSID from Bluetooth
+String passwordB = "";              // side-loaded password from Bluetooth
 
 // default values; will be updated
-String websocket_server_host = "192.168.2.191";
+String websocket_server_host = "192.168.0.116";
 uint16_t websocket_server_port = 8004;
 
 // Broadcasting the server IP
@@ -49,9 +46,6 @@ int flashlight = 0;
 using namespace websockets;
 WebsocketsClient client;
 
-#ifdef BT
-BluetoothSerial SerialBT;
-#endif 
 String receiveServerPort()
 {
   // read the server IP address
@@ -143,18 +137,15 @@ void onMessageCallback(WebsocketsMessage message)
     String key = data.substring(0, index);
     String value = data.substring(index + 1);
 
-    if (key == "ON_BOARD_LED")
+    if (key == "MOVE_FOCUS")
     {
-      if (value.toInt() == 1)
-      {
-        flashlight = 1;
-        digitalWrite(FLASH_PIN, HIGH);
-      }
-      else
-      {
-        flashlight = 0;
-        digitalWrite(FLASH_PIN, LOW);
-      }
+      int focusVal = value.toInt();
+      moveFocusRelative(focusVal, true);
+    }
+    else if (key == "ILLUMINATION")
+    {
+      int illuminationVal = value.toInt();
+      setNeopixel(illuminationVal);
     }
 
     Serial.print("Key: ");
@@ -173,6 +164,7 @@ uint32_t createUniqueID()
   return uid % 1000;
 }
 
+#ifdef CAMERA_MODEL_XIAO
 void initCamera()
 {
   camera_config_t config;
@@ -236,39 +228,62 @@ void initCamera()
     ESP.restart();
   }
 }
+#endif
+
 
 void setup()
 {
   Serial.begin(115200);
+  delay(100);
+  Serial.println("Starting up");
+  delay(100);
+  // illuimation-related
+  pixels.begin(); // This initializes the NeoPixel library.
+  pixels.setBrightness(255);
+  setNeopixel(0);
+
+  // motor-related
+  pinMode(STEPPER_MOTOR_DIR, OUTPUT);
+  pinMode(STEPPER_MOTOR_ENABLE, OUTPUT);
+  setMotorActive(true);
+  motor.setMaxSpeed(STEPPER_MOTOR_SPEED);
+  motor.setAcceleration(10000);
+  setMotorActive(false);
 
   // try loading the wifi ssid/password form the preferences
   preferences.begin("network", false);
-  
+
   // Get stored SSID and Password
-  ssidB = preferences.getString("ssid", ""); // If there is no saved SSID, return an empty string
+  ssidB = preferences.getString("ssid", "");         // If there is no saved SSID, return an empty string
   passwordB = preferences.getString("password", ""); // If there is no saved password, return an empty string
-  
+
   // connect to the Wifi
-  if(ssidB != "" && passwordB != "") {
+  if (ssidB != "" && passwordB != "")
+  {
+    Serial.println("Connecting to: ");
+    Serial.println(ssidB);
     WiFi.begin(ssidB.c_str(), passwordB.c_str());
-  } else {
+  }
+  else
+  {
+    Serial.println("Connecting to: ");
+    Serial.println(ssid);
     WiFi.begin(ssid, password);
   }
   while (WiFi.status() != WL_CONNECTED)
   {
+    Serial.println(".");
     delay(500);
   }
-  // compute the unique PORT
+// compute the unique PORT
+#ifdef CAMERA_MODEL_XIAO
   uint16_t uniqueID = createUniqueID();
-  uint16_t uniquePort = 8000 + uniqueID;
-
-  // start bluetooth
-  #ifdef BT
-  SerialBT.begin("ESP32_BT"+String(uniqueID)); // Start Bluetooth with the name "ESP32_BT"
-  Serial.println("The device started, now you can pair it with Bluetooth!");
-  #endif
   // init the camera
   initCamera();
+#else
+  uint16_t uniqueID = -1;
+#endif
+  uint16_t uniquePort = 8000 + uniqueID;
 
   // setup server to control the microscope
   initServer();
@@ -297,20 +312,7 @@ void setup()
       ESP.restart();
   }
 
-  // announce the BLE service to receive Wifi credentials if needed
-  // Create and start the BLE client task
-  if (0)
-  {
-    xTaskCreatePinnedToCore(
-        bleClientTask,        /* Task function. */
-        "BLEClientTask",      /* Name of the task. */
-        10000,                /* Stack size of the task */
-        NULL,                 /* Parameter of the task */
-        1,                    /* Priority of the task */
-        &bleClientTaskHandle, /* Task handle */
-        0                     /* Core where the task should run */
-    );
-  }
+
 }
 
 int t0 = 0;
@@ -330,38 +332,10 @@ void loop()
 {
   ArduinoOTA.handle();
 
-  #ifdef BT
-  // if available, receive bluetooth SSID/password
-  if (SerialBT.available()) {
-    String command = SerialBT.readStringUntil('\n');
-    String ssidB = "";
-    String passwordB = "";
-    // You may want to add more sophisticated command parsing here
-    if (command.startsWith("SSID:")) {
-      ssidB = command.substring(5); // Assumes the command is in the form "SSID:yourSSID"
-      Serial.println("SSID received: " + ssidB);
-      preferences.putString("ssid", ssidB);
-    } else if (command.startsWith("PASS:")) {
-      passwordB = command.substring(5); // Assumes the command is in the form "PASS:yourPassword"
-      Serial.println("Password received: " + passwordB);
-      preferences.putString("password", passwordB);
-      
-      // Once you have both SSID and password, you can connect to the Wi-Fi
-      WiFi.begin(ssidB.c_str(), passwordB.c_str());
-      
-      while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-      }
-      Serial.println("");
-      Serial.println("WiFi connected.");
-    }
-  }
-  #endif
-
   // Serial.println("Framerate : " + String(1000 / (1+ millis() - t0)) + " fps");
   t0 = millis();
   client.poll();
+#ifdef CAMERA_MODEL_XIAO
   if (isSendImage)
   {
     return;
@@ -384,6 +358,7 @@ void loop()
   esp_camera_fb_return(fb);
   //  client.send("TEST");
   frameID++;
+#endif
 }
 
 void initServer()
@@ -457,6 +432,7 @@ void initServer()
     String message = "{\"id\":\"" + String(uniqueId) + "\"}";
     request->send(200, "application/json", message); });
   // Capture Image Handler
+  #ifdef CAMERA_MODEL_XIAO
   server.on("/getImage", HTTP_GET, [](AsyncWebServerRequest *request)
             {
               isSendImage = true;
@@ -516,6 +492,7 @@ void initServer()
                 esp_camera_fb_return(fb);
               }
               isSendImage = false; });
+  #endif
   server.on("/resetESP", HTTP_GET, [](AsyncWebServerRequest *request)
             {
     String message = "{\"id\":\"" + String(1) + "\"}";
@@ -525,58 +502,46 @@ void initServer()
   server.begin();
 }
 
-void connectToServer(BLEAddress pAddress)
+// Neopixel Control
+void setNeopixel(int newVal)
 {
-  BLEClient *pClient = BLEDevice::createClient();
-  pClient->connect(pAddress);
-
-  BLERemoteService *pRemoteService = pClient->getService(BLEUUID(SERVICE_UUID));
-  if (pRemoteService != nullptr)
+  for (int i = 0; i < NUMPIXELS; i++)
   {
-    BLERemoteCharacteristic *pRemoteCharacteristic = pRemoteService->getCharacteristic(BLEUUID(CHARACTERISTIC_UUID));
-    if (pRemoteCharacteristic != nullptr)
-    {
-      std::string value = pRemoteCharacteristic->readValue();
-      Serial.print("Read IP: ");
-      Serial.println(value.c_str());
-    }
+    pixels.setPixelColor(i, pixels.Color(newVal, newVal, newVal));
   }
-  pClient->disconnect();
+  log_d("Setting Neopixel to %d", newVal);
+  pixels.show(); // Send the updated pixel colors to the hardware.
 }
 
-void bleClientTask(void *pvParameter)
+void setMotorActive(bool isActive)
 {
-  Serial.print("BLE Client Task running on core ");
-  Serial.println(xPortGetCoreID());
+  // low means active
+  digitalWrite(STEPPER_MOTOR_ENABLE, !isActive);
+}
 
-  // Initialize BLE
-  BLEDevice::init("");
 
-  BLEScan *pBLEScan = BLEDevice::getScan();
-  pBLEScan->setActiveScan(true);
-  for (;;)
-  {
-    BLEScanResults foundDevices = pBLEScan->start(5);
-    bool deviceFound = false;
-    for (int i = 0; i < foundDevices.getCount() && !deviceFound; i++)
-    {
-      BLEAdvertisedDevice device = foundDevices.getDevice(i);
-      if (device.haveServiceUUID() && device.getServiceUUID().equals(BLEUUID(SERVICE_UUID)))
-      {
-        Serial.println("Found our device! Connecting...");
-        connectToServer(device.getAddress());
-        deviceFound = true;
-      }
-    }
-    if (!deviceFound)
-    {
-      Serial.println("Device not found. Scanning again...");
-    }
-    // Reset the watchdog timer to prevent the watchdog error
-    esp_task_wdt_reset();
 
-    // Wait for a specified time or until an event occurs
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    // vTaskDelay(10000 / portTICK_PERIOD_MS); // Wait for 10 seconds before next scan
-  }
+// move focus using accelstepper
+void moveFocusRelative(int steps, bool handleEnable = true)
+{
+// a very bad idea probably, but otherwise we may have concurancy with the loop function
+  if (handleEnable)
+    setMotorActive(true);
+  // log_i("Moving focus %d steps, currentposition %d", motor.currentPosition() + steps, motor.currentPosition());
+
+  // run motor to new position with relative movement
+  motor.setSpeed(STEPPER_MOTOR_SPEED);
+  motor.runToNewPosition(motor.currentPosition() + steps);
+  if (handleEnable)
+    setMotorActive(false);
+}
+
+int getCurrentMotorPos()
+{
+  return motor.currentPosition();
+}
+
+void setSpeed(int speed)
+{
+  motor.setSpeed(speed);
 }

@@ -31,6 +31,10 @@ const connectedClients = new Set();
 const HTTP_PORT = 8000;
 const updateFrequency = 50;
 
+// For moving stage and turning on/off light
+let stageSocket = null;
+
+
 cluster.setupPrimary({ exec: path.join(__dirname, "sensor.js") });
 const workers = new Map();
 
@@ -136,10 +140,17 @@ wss.on("connection", (ws) => {
           }
         }
       }
-      if (data.operation === "snapAllCameras") {
+      if (data.operation == "snapAllCameras") {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        sendStageCommand('ILLUMINATION=100');          
+
         for (let [worker, _] of workers) {
           worker.send({ update: "snapImage" });
+          
         }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        sendStageCommand('ILLUMINATION=0');
+
       }
       if (data.operation === "reloadCameras") {
         // reannounce all cameras that are stored in the sensors.json file
@@ -158,7 +169,7 @@ wss.on("connection", (ws) => {
         }
       }
 
-      if (data.operation === "resetAllCameras") {
+      if (data.operation == "resetAllCameras") {
         // we need to delete the sensors.json file and restart the server
         console.log("Resetting all cameras");
         fs.writeFile(FILE_PATH, JSON.stringify([]), function (err) {
@@ -172,35 +183,27 @@ wss.on("connection", (ws) => {
         }
       }
 
-      if (data.operation === "stageMoveUp") {
+      if (data.operation == "stageMove") {
         // we need to send a message to the stage worker to move the stage up
         console.log("Moving stage up");
-        const stageWorker = [...workers.entries()].find(
-          ([, port]) => port === data.port
-        )?.[0];
-        if (stageWorker) {
-          stageWorker.send({
-            update: "stage",
-            data: 50,
-          });
-        }
+        // To send a command
+        command = "MOVE_FOCUS=" + String(data.value);
+        sendStageCommand(command); 
+
       }
 
-      if (data.operation === "stageMoveDown") {
-        // we need to send a message to the stage worker to move the stage up
-        console.log("Moving stage down");
-        const stageWorker = [...workers.entries()].find(
-          ([, port]) => port === data.port
-        )?.[0];
-        if (stageWorker) {
-          stageWorker.send({
-            update: "stage",
-            data: -50,
-          });
-        }
+      if (data.operation == "turnIlluminationON") {
+        // we need to send a message to the stage worker to turn on the illumination
+        // To send a command
+        sendStageCommand('ILLUMINATION=100');
       }
 
-
+      if (data.operation == "turnIlluminationOFF") {
+        // we need to send a message to the stage worker to turn off the illumination
+        // To send a command
+        sendStageCommand('ILLUMINATION=0');
+      }
+      
     } catch (error) { }
   });
 
@@ -309,10 +312,46 @@ async function handleCamera(port, uniqueCamId) {
   startWorkerForCamera(port, currentCameraId);
 }
 
-async function handleStage(port, uniqueStageId) {
-  const currentStageId = await appendIPToFile(port, uniqueStageId);
-  console.log(`Current stage ID: ${currentStageId}`);
-  startWorkerForStage(port, currentStageId);
+
+function handleStage(port, uniqueCamId) {
+  const stagewss = new WebSocket.Server({ port: port });
+
+  stagewss.on('connection', function connection(ws) {
+      console.log('Stage connected');
+      stageSocket = ws;
+
+      ws.on('message', function incoming(message) {
+          console.log('Received message from stage:', message);
+          // Handle incoming messages as necessary
+      });
+
+      ws.on('close', function close() {
+          console.log('Stage disconnected');
+          stageSocket = null;
+      });
+  });
+
+  stagewss.on('listening', () => {
+      console.log(`Stage WebSocket Server is listening on port ${port}`);
+  });
+
+  stagewss.on('error', function error(err) {
+      console.error('Stage WebSocket Server error:', err);
+  });
+}
+
+function sendStageCommand(command) {
+  if (stageSocket && stageSocket.readyState === WebSocket.OPEN) {
+      stageSocket.send(command, (err) => {
+          if (err) {
+              console.error('Error sending command to stage:', err);
+          } else {
+              console.log(`Command sent to stage: ${command}`);
+          }
+      });
+  } else {
+      console.log('No stage connection available to send command.');
+  }
 }
 
 // Handle POST request on /setIP
@@ -327,6 +366,9 @@ app.post("/setIPPort", (req, res) => {
     const uniqueCamId = port - 8000;
     if (uniqueCamId < 0) { // stage will have a negative ID
       handleStage(port, uniqueCamId);
+      // Initialize the stage WebSocket server
+      //handleStage(8005, -1); // Example port and uniqueCamId
+
       res.send({ message: "IP received and stored" });
     }
     else {
@@ -373,44 +415,6 @@ function startWorkerForCamera(port, cameraId) {
 
   workers.set(worker, port, cameraId);
   console.log(`Started worker for camera ${cameraId} on port ${port}`);
-}
-
-// Start a new worker for the stage
-function startWorkerForStage(port, stageId) {
-  // if workers has port/cameraID of the new incoming one, kill the one with same port/cameraID
-  const isPortInWorkers = Array.from(workers.values()).some(
-    (workerPort) => workerPort === port
-  );
-
-  if (isPortInWorkers) {
-    for (let [worker, oldport] of workers) {
-      if (oldport === port) {
-        worker.kill();
-        workers.delete(worker);
-        break;
-      }
-    }
-  }
-  const worker = cluster.fork();
-  worker.send({
-    update: "stage",
-    data: {
-      key: stageId,
-      port: port,
-      class: "stage-instance",
-      display: "Stage#" + String(stageId),
-    },
-  });
-
-  worker.on("message", (message) => {
-    if (message.update === "stage") {
-      //updateSensors(message.data);
-      console.log("Stage message received: " + message.data);
-    }
-  });
-
-  workers.set(worker, port, stageId);
-  console.log(`Started worker for stage ${stageId} on port ${port}`);
 }
 
 

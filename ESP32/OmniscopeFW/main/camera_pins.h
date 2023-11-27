@@ -19,3 +19,13 @@
 
 #define LED_LEDC_CHANNEL  2
 #define LED_GPIO_NUM      21
+
+// Neopixel
+#define NUMPIXELS 128
+#define NEOPIXEL_PIN 2
+
+// Focusmotor
+#define STEPPER_MOTOR_SPEED 20000
+#define STEPPER_MOTOR_DIR 9
+#define STEPPER_MOTOR_STEP 7
+#define STEPPER_MOTOR_ENABLE 8

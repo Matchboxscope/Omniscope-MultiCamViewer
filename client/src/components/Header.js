@@ -11,11 +11,11 @@ const Header = () => {
   };
 
   const handleFocusPlus = () => {
-    sendMessage({ operation: 'focusPlus' });
+    sendMessage({ operation: 'stageMove', value: 100 });
   }
   
   const handleFocusMinus = () => {
-    sendMessage({ operation: 'focusMinus' });
+    sendMessage({ operation: 'stageMove', value: -100  });
   }
 
   const handleTimelapseStart = () => {
@@ -34,6 +34,14 @@ const Header = () => {
     sendMessage({ operation: 'resetAllCameras' });
   }
 
+  const handleIlluOn = () => {
+    sendMessage({ operation: 'turnIlluminationON' });
+  }
+
+  const handleIlluOff = () => {
+    sendMessage({ operation: 'turnIlluminationOFF' });
+  }
+
 
   // Add functions for other buttons and inputs similarly
 
@@ -42,8 +50,10 @@ const Header = () => {
     <Toolbar>
       <img src="https://avatars.githubusercontent.com/u/4345528?v=4" alt="Omniscope" width="50" height="50" />
       <Button color="inherit" onClick={handleSnapAll}>Snap All</Button>
-      <Button color="inherit">+ Focus</Button>
-      <Button color="inherit">- Focus</Button>
+      <Button color="inherit" onClick={handleFocusMinus}>+ Focus</Button>
+      <Button color="inherit" onClick={handleFocusPlus}>- Focus</Button>
+      <Button color="inherit" onClick={handleIlluOn}>Illu On</Button>
+      <Button color="inherit" onClick={handleIlluOff}>Illu Off</Button>
       <TextField
         label="Timelapse Period (s)"
         variant="outlined"
