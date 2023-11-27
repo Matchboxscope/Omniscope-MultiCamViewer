@@ -1,5 +1,4 @@
 const WebSocket = require('ws');
-const fluidb = require('fluidb');
 const fs = require('fs');
 const path = require('path');
 
