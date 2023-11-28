@@ -13,16 +13,8 @@
 #include <Preferences.h>
 #include <Arduino.h>
 #include <esp_task_wdt.h>
-#include <Adafruit_NeoPixel.h>
-#include "AccelStepper.h"
 
 
-// Illumination related
-Adafruit_NeoPixel pixels(NUMPIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
-
-// Stepper-related
-AccelStepper motor(1, STEPPER_MOTOR_STEP, STEPPER_MOTOR_DIR);
-void moveFocusRelative(int steps, bool handleEnable);
 
 const char *ssid = "omniscope";     // Your wifi name like "myWifiNetwork"
 const char *password = "omniscope"; // Your password to the wifi network like "password123"
@@ -139,13 +131,7 @@ void onMessageCallback(WebsocketsMessage message)
 
     if (key == "MOVE_FOCUS")
     {
-      int focusVal = value.toInt();
-      moveFocusRelative(focusVal, true);
-    }
-    else if (key == "ILLUMINATION")
-    {
-      int illuminationVal = value.toInt();
-      setNeopixel(illuminationVal);
+      Serial.println("Moving focus");
     }
 
     Serial.print("Key: ");
@@ -236,19 +222,7 @@ void setup()
   Serial.begin(115200);
   delay(100);
   Serial.println("Starting up");
-  delay(100);
-  // illuimation-related
-  pixels.begin(); // This initializes the NeoPixel library.
-  pixels.setBrightness(255);
-  setNeopixel(0);
 
-  // motor-related
-  pinMode(STEPPER_MOTOR_DIR, OUTPUT);
-  pinMode(STEPPER_MOTOR_ENABLE, OUTPUT);
-  setMotorActive(true);
-  motor.setMaxSpeed(STEPPER_MOTOR_SPEED);
-  motor.setAcceleration(10000);
-  setMotorActive(false);
 
   // try loading the wifi ssid/password form the preferences
   preferences.begin("network", false);
@@ -257,6 +231,7 @@ void setup()
   ssidB = preferences.getString("ssid", "");         // If there is no saved SSID, return an empty string
   passwordB = preferences.getString("password", ""); // If there is no saved password, return an empty string
 
+  scanWifi();
   // connect to the Wifi
   if (ssidB != "" && passwordB != "")
   {
@@ -502,46 +477,28 @@ void initServer()
   server.begin();
 }
 
-// Neopixel Control
-void setNeopixel(int newVal)
-{
-  for (int i = 0; i < NUMPIXELS; i++)
+void scanWifi(){
+    int n = WiFi.scanNetworks();
+  Serial.println("Scan completed.");
+  if (n == 0)
   {
-    pixels.setPixelColor(i, pixels.Color(newVal, newVal, newVal));
+    Serial.println("No network found");
   }
-  log_d("Setting Neopixel to %d", newVal);
-  pixels.show(); // Send the updated pixel colors to the hardware.
-}
+  else
+  {
+    Serial.print(n);
+    Serial.println(" networks are discovered");
+    for (int i = 0; i < n; ++i)
+    {
+      Serial.print(i + 1);
+      Serial.print(": ");
+      Serial.print(WiFi.SSID(i));
+      Serial.print(" (");
+      Serial.print(WiFi.RSSI(i));
+      Serial.println(")");
+      delay(10);
+    }
+  }
+  Serial.println("");
 
-void setMotorActive(bool isActive)
-{
-  // low means active
-  digitalWrite(STEPPER_MOTOR_ENABLE, !isActive);
-}
-
-
-
-// move focus using accelstepper
-void moveFocusRelative(int steps, bool handleEnable = true)
-{
-// a very bad idea probably, but otherwise we may have concurancy with the loop function
-  if (handleEnable)
-    setMotorActive(true);
-  // log_i("Moving focus %d steps, currentposition %d", motor.currentPosition() + steps, motor.currentPosition());
-
-  // run motor to new position with relative movement
-  motor.setSpeed(STEPPER_MOTOR_SPEED);
-  motor.runToNewPosition(motor.currentPosition() + steps);
-  if (handleEnable)
-    setMotorActive(false);
-}
-
-int getCurrentMotorPos()
-{
-  return motor.currentPosition();
-}
-
-void setSpeed(int speed)
-{
-  motor.setSpeed(speed);
 }

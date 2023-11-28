@@ -6,7 +6,9 @@ const WebSocket = require("ws");
 const cluster = require("cluster");
 const os = require("os");
 const globalSensorData = require("./global-sensor-data");
+const { Mutex } = require('async-mutex');
 
+const mutex = new Mutex();
 const http = require("http");
 const dgram = require("dgram");
 const bodyParser = require("body-parser");
@@ -421,49 +423,57 @@ function startWorkerForCamera(port, cameraId) {
 }
 
 
-// Append IP to the file
+
 async function appendIPToFile(newPort, newCamId) {
-  // create a random ID for the new camera
-  console.log("Appending to file");
-  let currentCameraId = 0;
-  let data = await fs.promises.readFile(FILE_PATH, "utf8");
-  let sensors = !data ? {} : JSON.parse(data);
-  // Add new camera if it doesn't already exist
-  if (!sensors[newCamId]) {
-    currentCameraId = Object.keys(sensors).length + 1;
-    console.log(`New camera ${newCamId} added to ${FILE_PATH}`);
-    sensors[newCamId] = {
-      port: newPort,
-      class: "cam-instance",
-      display: `Cam#${currentCameraId}`,
-      id: `${currentCameraId}`,
-    };
-  } else {
-    currentCameraId = sensors[newCamId].id;
+  // Lock the function
+  const release = await mutex.acquire();
+
+  try {
+    console.log("Appending to file");
+    let currentCameraId = 0;
+    let data = await fs.promises.readFile(FILE_PATH, "utf8");
+    let sensors = !data ? {} : JSON.parse(data);
+    // Add new camera if it doesn't already exist
+    if (!sensors[newCamId]) {
+      currentCameraId = Object.keys(sensors).length + 1;
+      console.log(`New camera ${newCamId} added to ${FILE_PATH}`);
+      sensors[newCamId] = {
+        port: newPort,
+        class: "cam-instance",
+        display: `Cam#${currentCameraId}`,
+        id: `${currentCameraId}`,
+      };
+    } else {
+      currentCameraId = sensors[newCamId].id;
+      console.log(
+        `Camera ${newCamId} already exists in ${FILE_PATH} with ID ${currentCameraId}`
+      );
+      // Update IP if camera already exists
+      sensors[newCamId].port = newPort;
+    }
+    // Write to file
+    await fs.promises.writeFile(FILE_PATH, JSON.stringify(sensors, null, 2));
     console.log(
-      `Camera ${newCamId} already exists in ${FILE_PATH} with ID ${currentCameraId}`
+      `New camera ${newCamId} with IP ${newPort} added to ${FILE_PATH}`
     );
-    // Update IP if camera already exists
-    sensors[newCamId].port = newPort;
+    return currentCameraId;
+  } finally {
+    // Release the lock
+    release();
   }
-  // Write to file
-  await fs.promises.writeFile(FILE_PATH, JSON.stringify(sensors, null, 2));
-  console.log(
-    `New camera ${newCamId} with IP ${newPort} added to ${FILE_PATH}`
-  );
-  return currentCameraId;
 }
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
 });
 
+
 // send a simple test response if the server is up and running
 app.get("/client", (_req, res) => {
   res.send("Server is up and running!");
 });
 
-app.listen(HTTP_PORT, () => {
+app.listen(HTTP_PORT, '0.0.0.0', () => {
   console.log(
     `HTTP server starting on ${HTTP_PORT} with process ID ${process.pid}`
   );
