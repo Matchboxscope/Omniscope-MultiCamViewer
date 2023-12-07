@@ -7,8 +7,8 @@ const cluster = require("cluster");
 const os = require("os");
 const globalSensorData = require("./global-sensor-data");
 const { Mutex } = require('async-mutex');
-
 const mutex = new Mutex();
+
 const http = require("http");
 const dgram = require("dgram");
 const bodyParser = require("body-parser");
@@ -34,7 +34,7 @@ app.use(express.static(path.join(__dirname, '../client/build')));
 
 const connectedClients = new Set();
 const HTTP_PORT = 8000;
-const updateFrequency = 50;
+const updateFrequency = 100;
 
 // For moving stage and turning on/off light
 let stageSocket = null;
@@ -467,13 +467,12 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
 });
 
-
 // send a simple test response if the server is up and running
 app.get("/client", (_req, res) => {
   res.send("Server is up and running!");
 });
 
-app.listen(HTTP_PORT, '0.0.0.0', () => {
+app.listen(HTTP_PORT, () => {
   console.log(
     `HTTP server starting on ${HTTP_PORT} with process ID ${process.pid}`
   );

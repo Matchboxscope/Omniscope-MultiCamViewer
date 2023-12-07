@@ -5,17 +5,41 @@
     "display": "Cam#5",
     "id": "5"
   },
+  "37": {
+    "port": 8037,
+    "class": "cam-instance",
+    "display": "Cam#14",
+    "id": "14"
+  },
   "65": {
     "port": 8065,
     "class": "cam-instance",
     "display": "Cam#4",
     "id": "4"
   },
+  "84": {
+    "port": 8084,
+    "class": "cam-instance",
+    "display": "Cam#17",
+    "id": "17"
+  },
+  "141": {
+    "port": 8141,
+    "class": "cam-instance",
+    "display": "Cam#16",
+    "id": "16"
+  },
   "379": {
     "port": 8379,
     "class": "cam-instance",
     "display": "Cam#10",
     "id": "10"
+  },
+  "386": {
+    "port": 8386,
+    "class": "cam-instance",
+    "display": "Cam#13",
+    "id": "13"
   },
   "530": {
     "port": 8530,
@@ -28,6 +52,12 @@
     "class": "cam-instance",
     "display": "Cam#12",
     "id": "12"
+  },
+  "593": {
+    "port": 8593,
+    "class": "cam-instance",
+    "display": "Cam#15",
+    "id": "15"
   },
   "613": {
     "port": 8613,

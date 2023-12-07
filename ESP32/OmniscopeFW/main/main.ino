@@ -76,8 +76,8 @@ bool sendPortToServer(String serverIP, int uniquePort, int replyPort)
   if (WiFi.status() == WL_CONNECTED)
   {
     /*
-    curl -X 'POST' \
-  'http://192.168.2.192:8000/setIPPort' \
+    curl -X 'POST' \192.168.178.35:8000
+  'http://192.168.178.35/setIPPort' \
   -H 'accept: application/json' \
   -H 'Content-Type: application/json' \
   -d '{"ip": "192.168.1.1", "port":8001}'

@@ -3,19 +3,19 @@
   "version": "1.0.0",
   "main": "server.js",
   "dependencies": {
+    "async-mutex": "^0.4.0",
     "body-parser": "^1.20.2",
     "express": "^4.18.2",
     "fluidb": "^0.3.0",
     "path": "^0.12.7",
-    "ws": "^7.5.7", 
-    "async-mutex": "^0.3.0"
+    "ws": "^7.5.7"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
     "electron-start": "electron ."
   },
-  "author": "Nomadic Geek",
+  "author": "Benedict diederich",
   "license": "ISC",
   "description": "",
   "devDependencies": {

@@ -84,11 +84,13 @@ function saveImage() {
 
 async function main() {
 	await initialDataReceived;
-	if (!sensor) {
+	if (!sensor || !sensor.port) {
+		console.error('Sensor or sensor port is not defined');
 		process.exit();
 	}
 	// Save an image every minute
-	setInterval(saveImage, 60000);
+	// setInterval(saveImage, 60000);
+
 
 	const server = new WebSocket.Server({ port: sensor.port }, () => console.log(`WS Server is listening at ${sensor.port}`));
 	server.on('connection', (ws) => {
