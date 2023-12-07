@@ -34,7 +34,7 @@ app.use(express.static(path.join(__dirname, '../client/build')));
 
 const connectedClients = new Set();
 const HTTP_PORT = 8000;
-const updateFrequency = 100;
+const updateFrequency = 200;
 
 // For moving stage and turning on/off light
 let stageSocket = null;
@@ -52,35 +52,16 @@ Object.assign(
   Object.fromEntries(sensorsArray.map((sensor) => [sensor.key, sensor]))
 );
 
-// lenghts of sensorArray
-/*
-let nCameras = sensorsArray.length;
-const sensorsPerWorker = 1; // Math.ceil(sensorsArray.length / cores);
 
-
-for (let i = 0; i < nCameras; i++) {
-  const workerSensors = sensorsArray.slice(i * sensorsPerWorker, (i + 1) * sensorsPerWorker);
-  if (workerSensors.length === 0) continue;
-	
-  const worker = cluster.fork();
-  worker.send({ update: 'sensor', data: workerSensors[0] });
-	
-  worker.on('message', (message) => {
-    if (message.update === 'sensor') {
-      updateSensors(message.data);
-    }
-  });
-	
-  workers.set(worker, workerSensors[0].port, i);
-}
-*/
 
 cluster.on("exit", (worker) => {
   console.log(`Worker ${worker.process.pid} killed. Starting new one!`);
 
   workers.delete(worker);
+  /*
+  // starting new worker
   const newWorker = cluster.fork();
-  const sensor = sensorsArray.slice(
+  const sensor = sensorsArray.slice( 
     (workers.size - 1) * Math.floor(sensorsArray.length / os.cpus().length),
     workers.size * Math.floor(sensorsArray.length / os.cpus().length)
   );
@@ -93,6 +74,7 @@ cluster.on("exit", (worker) => {
   });
 
   workers.set(newWorker, sensor.port);
+  */
 });
 
 function updateSensors(updatedSensor) {
@@ -243,23 +225,7 @@ function getServerIP(desiredInterfaceName) {
   return serverIP;
 }
 
-// Function to get the desired network interface's local address
-function getDesiredNetworkInterfaceAddress(desiredInterfaceName) {
-  const ifaces = os.networkInterfaces();
 
-  for (let ifname in ifaces) {
-    if (ifname === desiredInterfaceName) {
-      const iface = ifaces[ifname].find(
-        (iface) => iface.family === "IPv4" && !iface.internal
-      );
-      if (iface) {
-        return iface.address;
-      }
-    }
-  }
-
-  return "0.0.0.0"; // Default to binding to all interfaces if not found
-}
 
 
 let desiredInterfaceName;
@@ -275,7 +241,7 @@ switch(os.platform()) {
         break;
     case 'linux':
         // Linux
-        desiredInterfaceName = 'wlan0'; // This might change based on your system
+        desiredInterfaceName = 'eth0'; // wlan0'; // This might change based on your system
         break;
     default:
         console.log('Unsupported platform');
@@ -284,7 +250,7 @@ switch(os.platform()) {
 // Create a UDP socket bound to the desired network interface's local address
 const server = dgram.createSocket("udp4");
 server.bind({
-  address: getDesiredNetworkInterfaceAddress(desiredInterfaceName),
+  address: getServerIP(desiredInterfaceName),
   port: 0, // Let the OS choose an available port
 });
 
@@ -362,12 +328,10 @@ function sendStageCommand(command) {
 // Handle POST request on /setIP
 ////curl -X 'POST' 'http://192.168.0.116:8000/setIPPort' -H 'accept: application/json' -H 'Content-Type: application/json'  -d '{"ip": "192.168.1.1", "port":8001}'
 app.post("/setIPPort", (req, res) => {
-  console.log("Received POST request on /setIP");
-  console.log(req.body);
   const ip = req.body.ip;
   const port = req.body.port;
   if (ip) {
-    console.log(`Received IP/port: ${ip}:${port}`);
+    //console.log(`Received IP/port: ${ip}:${port}`);
     const uniqueCamId = port - 8000;
     if (uniqueCamId < 0) { // stage will have a negative ID
       handleStage(port, uniqueCamId);

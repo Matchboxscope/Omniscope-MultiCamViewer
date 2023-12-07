@@ -8,7 +8,9 @@ let validEntities = [];
 let counter = 0;
 let initialDataReceived;
 let resolveInitialData;
-
+// Variable to store the time of the last processed frame
+let lastFrameTime = 0;
+let frameDelay = 200; // ms
 initialDataReceived = new Promise((resolve) => {
 	resolveInitialData = resolve;
 });
@@ -104,41 +106,21 @@ async function main() {
 			}
 			
 			if (typeof data === 'object') {
-				let img = Buffer.from(Uint8Array.from(data)).toString('base64');
-				counter++;
-				sensor.image = img;
-			} else {
-				const commandRegex = /\(c:(.*?)\)/g;
-				const sensorRegex = /\(s:(.*?)\)/g;
-				let match;
-				
-				while ((match = commandRegex.exec(data))) {
-					const keyValuePairs = match[1];
-					const pairs = keyValuePairs.trim().split(/\s*,\s*/);
-					
-					for (const pair of pairs) {
-						const [key, value] = pair.split("=");
-						const commandFind = sensor.commands.find(c => c.id === key);
-						if (commandFind) {
-							commandFind.state = value;
-						}
-					}
+				// Get the current time
+				const now = Date.now();
+		  
+				// If enough time has passed since the last frame
+				if (now - lastFrameTime >= frameDelay) {
+				  // Process the frame
+				  let img = Buffer.from(Uint8Array.from(data)).toString('base64');
+				  counter++;
+				  sensor.image = img;
+		  
+				  // Update the time of the last processed frame
+				  lastFrameTime = now;
 				}
-				
-				const sensorsObj = {};
-				while ((match = sensorRegex.exec(data))) {
-					const keyValuePairs = match[1];
-					const pairs = keyValuePairs.trim().split(/\s*,\s*/);
-					
-					for (const pair of pairs) {
-						const [key, value] = pair.split("=");
-						sensorsObj[key] = value;
-					}
-				}
-				
-				sensor.sensors = sensorsObj;
-			}
-			
+			  }
+			// send to the client the image data
 			process.send({ update: 'sensor', data: sensor });
 		});
 	});
