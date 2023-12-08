@@ -36,6 +36,12 @@ const connectedClients = new Set();
 const HTTP_PORT = 8000;
 const updateFrequency = 200;
 
+// Define the maximum number of child processes
+const maxChildProcesses = 10; // Replace with your desired limit
+
+// Initialize the child process count
+let childProcessCount = 0;
+
 // For moving stage and turning on/off light
 let stageSocket = null;
 
@@ -56,25 +62,9 @@ Object.assign(
 
 cluster.on("exit", (worker) => {
   console.log(`Worker ${worker.process.pid} killed. Starting new one!`);
-
+  // Decrement the child process count
+  childProcessCount--;
   workers.delete(worker);
-  /*
-  // starting new worker
-  const newWorker = cluster.fork();
-  const sensor = sensorsArray.slice( 
-    (workers.size - 1) * Math.floor(sensorsArray.length / os.cpus().length),
-    workers.size * Math.floor(sensorsArray.length / os.cpus().length)
-  );
-  newWorker.send({ update: "sensor", data: sensor });
-
-  newWorker.on("message", (message) => {
-    if (message.update === "sensor") {
-      updateSensors(message.data);
-    }
-  });
-
-  workers.set(newWorker, sensor.port);
-  */
 });
 
 function updateSensors(updatedSensor) {
@@ -129,11 +119,11 @@ wss.on("connection", (ws) => {
       }
       if (data.operation == "snapAllCameras") {
         await new Promise((resolve) => setTimeout(resolve, 500));
-        sendStageCommand('ILLUMINATION=100');          
+        sendStageCommand('ILLUMINATION=100');
 
         for (let [worker, _] of workers) {
           worker.send({ update: "snapImage" });
-          
+
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
         sendStageCommand('ILLUMINATION=0');
@@ -167,6 +157,7 @@ wss.on("connection", (ws) => {
         for (let [worker, _, __] of workers) {
           worker.kill();
           workers.delete(worker);
+          childProcessCount=0;
         }
       }
 
@@ -175,7 +166,7 @@ wss.on("connection", (ws) => {
         console.log("Moving stage up");
         // To send a command
         command = "MOVE_FOCUS=" + String(data.value);
-        sendStageCommand(command); 
+        sendStageCommand(command);
 
       }
 
@@ -190,7 +181,7 @@ wss.on("connection", (ws) => {
         // To send a command
         sendStageCommand('ILLUMINATION=0');
       }
-      
+
     } catch (error) { }
   });
 
@@ -198,6 +189,7 @@ wss.on("connection", (ws) => {
     // closing the react app will cause the client to disconnect
     console.log("Client disconnected: " + ws._socket.remoteAddress);
     connectedClients.delete(ws);
+    childProcessCount--;
   });
 });
 
@@ -230,22 +222,22 @@ function getServerIP(desiredInterfaceName) {
 
 let desiredInterfaceName;
 
-switch(os.platform()) {
-    case 'win32':
-        // Windows
-        desiredInterfaceName = 'Wi-Fi';
-        break;
-    case 'darwin':
-        // MacOS
-        desiredInterfaceName = 'en0'; // This might change based on your system
-        break;
-    case 'linux':
-        // Linux
-        desiredInterfaceName = 'eth0'; // wlan0'; // This might change based on your system
-        break;
-    default:
-        console.log('Unsupported platform');
-        break;
+switch (os.platform()) {
+  case 'win32':
+    // Windows
+    desiredInterfaceName = 'Wi-Fi';
+    break;
+  case 'darwin':
+    // MacOS
+    desiredInterfaceName = 'en0'; // This might change based on your system
+    break;
+  case 'linux':
+    // Linux
+    desiredInterfaceName = 'eth0'; // wlan0'; // This might change based on your system
+    break;
+  default:
+    console.log('Unsupported platform');
+    break;
 }
 // Create a UDP socket bound to the desired network interface's local address
 const server = dgram.createSocket("udp4");
@@ -288,40 +280,40 @@ function handleStage(port, uniqueCamId) {
   const stagewss = new WebSocket.Server({ port: port });
 
   stagewss.on('connection', function connection(ws) {
-      console.log('Stage connected');
-      stageSocket = ws;
+    console.log('Stage connected');
+    stageSocket = ws;
 
-      ws.on('message', function incoming(message) {
-          console.log('Received message from stage:', message);
-          // Handle incoming messages as necessary
-      });
+    ws.on('message', function incoming(message) {
+      console.log('Received message from stage:', message);
+      // Handle incoming messages as necessary
+    });
 
-      ws.on('close', function close() {
-          console.log('Stage disconnected');
-          stageSocket = null;
-      });
+    ws.on('close', function close() {
+      console.log('Stage disconnected');
+      stageSocket = null;
+    });
   });
 
   stagewss.on('listening', () => {
-      console.log(`Stage WebSocket Server is listening on port ${port}`);
+    console.log(`Stage WebSocket Server is listening on port ${port}`);
   });
 
   stagewss.on('error', function error(err) {
-      console.error('Stage WebSocket Server error:', err);
+    console.error('Stage WebSocket Server error:', err);
   });
 }
 
 function sendStageCommand(command) {
   if (stageSocket && stageSocket.readyState === WebSocket.OPEN) {
-      stageSocket.send(command, (err) => {
-          if (err) {
-              console.error('Error sending command to stage:', err);
-          } else {
-              console.log(`Command sent to stage: ${command}`);
-          }
-      });
+    stageSocket.send(command, (err) => {
+      if (err) {
+        console.error('Error sending command to stage:', err);
+      } else {
+        console.log(`Command sent to stage: ${command}`);
+      }
+    });
   } else {
-      console.log('No stage connection available to send command.');
+    console.log('No stage connection available to send command.');
   }
 }
 
@@ -361,29 +353,39 @@ function startWorkerForCamera(port, cameraId) {
       if (oldport === port) {
         worker.kill();
         workers.delete(worker);
+        childProcessCount--;
         break;
       }
     }
   }
-  const worker = cluster.fork();
-  worker.send({
-    update: "sensor",
-    data: {
-      key: cameraId,
-      port: port,
-      class: "cam-instance",
-      display: "Cam#" + String(cameraId),
-    },
-  });
 
-  worker.on("message", (message) => {
-    if (message.update === "sensor") {
-      updateSensors(message.data);
-    }
-  });
+  if (childProcessCount < maxChildProcesses) {
+    // Increment the child process count
+    childProcessCount++;
 
-  workers.set(worker, port, cameraId);
-  console.log(`Started worker for camera ${cameraId} on port ${port}`);
+    // Start a new worker
+    const worker = cluster.fork();
+    worker.send({
+      update: "sensor",
+      data: {
+        key: cameraId,
+        port: port,
+        class: "cam-instance",
+        display: "Cam#" + String(cameraId),
+      },
+    });
+    worker.on("message", (message) => {
+      if (message.update === "sensor") {
+        updateSensors(message.data);
+      }
+    });
+    workers.set(worker, port, cameraId);
+    console.log(`Started worker for camera ${cameraId} on port ${port}`);
+
+  }
+  else {
+    console.log("Max child processes reached");
+  }
 }
 
 
