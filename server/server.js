@@ -37,7 +37,7 @@ const HTTP_PORT = 8000;
 const updateFrequency = 200;
 
 // Define the maximum number of child processes
-const maxChildProcesses = 10; // Replace with your desired limit
+const maxChildProcesses = 24; // Replace with your desired limit
 
 // Initialize the child process count
 let childProcessCount = 0;
@@ -58,13 +58,28 @@ Object.assign(
   Object.fromEntries(sensorsArray.map((sensor) => [sensor.key, sensor]))
 );
 
+// Assuming `workers` is a Map where the keys are worker IDs and the values are worker objects
+function deleteWorker(workerId) {
+  const worker = workers.get(workerId);
+  if (worker) {
+    // Remove all event listeners attached to the worker
+    worker.removeAllListeners();
 
+    // If the worker is a child process, kill it
+    if (typeof worker.kill === 'function') {
+      worker.kill();
+    }
+
+    // Delete the worker from the Map
+    workers.delete(workerId);
+  }
+}
 
 cluster.on("exit", (worker) => {
-  console.log(`Worker ${worker.process.pid} killed. Starting new one!`);
+  console.log(`Worker ${worker.process.pid} killed!`);
   // Decrement the child process count
   childProcessCount--;
-  workers.delete(worker);
+  deleteWorker(worker.id);
 });
 
 function updateSensors(updatedSensor) {
@@ -156,7 +171,7 @@ wss.on("connection", (ws) => {
         // kill all workers
         for (let [worker, _, __] of workers) {
           worker.kill();
-          workers.delete(worker);
+          deleteWorker(worker.id);
           childProcessCount=0;
         }
       }
@@ -351,8 +366,7 @@ function startWorkerForCamera(port, cameraId) {
   if (isPortInWorkers) {
     for (let [worker, oldport] of workers) {
       if (oldport === port) {
-        worker.kill();
-        workers.delete(worker);
+        deleteWorker(worker.id);
         childProcessCount--;
         break;
       }

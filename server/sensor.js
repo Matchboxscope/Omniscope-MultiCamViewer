@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { log } = require('console');
 
 let sensor;
 let command = null;
@@ -31,6 +32,7 @@ fs.readdir(imagesPath, { withFileTypes: true }, (err, files) => {
 
 process.on('uncaughtException', (error, origin) => {
 	console.log('----- Uncaught exception -----');
+	console.log(sensor.port);
 	console.log(error);
 	console.log('----- Exception origin -----');
 	console.log(origin);
@@ -39,6 +41,7 @@ process.on('uncaughtException', (error, origin) => {
 
 process.on('unhandledRejection', (reason, promise) => {
 	console.log('----- Unhandled Rejection -----');
+	console.log(sensor.port);
 	console.log(promise);
 	console.log('----- Reason -----');
 	console.log(reason);
@@ -115,7 +118,7 @@ async function main() {
 				  let img = Buffer.from(Uint8Array.from(data)).toString('base64');
 				  counter++;
 				  sensor.image = img;
-		  
+				  console.log('Frame received from ' + ws._socket.remoteAddress + ' ' + counter);		  
 				  // Update the time of the last processed frame
 				  lastFrameTime = now;
 				}

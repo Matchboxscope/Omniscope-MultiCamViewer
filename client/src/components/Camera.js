@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CircularProgress } from '@mui/material';
 import { useWebSocket } from '../context/WebSocketContext';
 
-const Camera = ({ id }) => {
+
+
+const Camera = ({ id, onFrameUpdate, onFramerateUpdate }) => {
   const { devices } = useWebSocket();
+  const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
   const [zoomLevel, setZoomLevel] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -42,6 +45,19 @@ const Camera = ({ id }) => {
     width: '100%',
     objectFit: 'cover',
   };
+
+  useEffect(() => {
+    if (isConnected && device.image) {
+      const currentTime = Date.now();
+      const frameTime = currentTime - lastUpdateTime;
+      const framerate = 1000 / frameTime;
+
+      onFramerateUpdate(framerate);
+      setLastUpdateTime(currentTime);
+      onFrameUpdate();
+    }
+  }, [device?.image, isConnected, onFrameUpdate, onFramerateUpdate, lastUpdateTime]);
+
 
   return (
     <div 
