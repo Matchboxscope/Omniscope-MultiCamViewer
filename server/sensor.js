@@ -1,65 +1,73 @@
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
-const { log } = require('console');
+const { SerialPort } = require("serialport");
+const { ReadlineParser } = require("@serialport/parser-readline");
 
 let sensor;
 let command = null;
+let port;
+let parser;
 let validEntities = [];
 let counter = 0;
-let initialDataReceived;
-let resolveInitialData;
-// Variable to store the time of the last processed frame
 let lastFrameTime = 0;
 let frameDelay = 200; // ms
-initialDataReceived = new Promise((resolve) => {
-	resolveInitialData = resolve;
-});
-
 
 const imagesPath = path.join(__dirname, 'images');
 if (!fs.existsSync(imagesPath)) {
-	fs.mkdirSync(imagesPath);
+    fs.mkdirSync(imagesPath);
 }
 
 fs.readdir(imagesPath, { withFileTypes: true }, (err, files) => {
-	if (err) {
-		console.error(err);
-		return;
-	}
-	validEntities = files.filter(file => file.isDirectory()).map(folder => folder.name);
+    if (err) {
+        console.error(err);
+        return;
+    }
+    validEntities = files.filter(file => file.isDirectory()).map(folder => folder.name);
 });
 
-process.on('uncaughtException', (error, origin) => {
-	console.log('----- Uncaught exception -----');
-	console.log(sensor.port);
-	console.log(error);
-	console.log('----- Exception origin -----');
-	console.log(origin);
-	console.log('----- Status -----');
-});
+const wss = new WebSocket.Server({ port: 8080 }, () => console.log(`WS Server is listening at port 8080`));
 
-process.on('unhandledRejection', (reason, promise) => {
-	console.log('----- Unhandled Rejection -----');
-	console.log(sensor.port);
-	console.log(promise);
-	console.log('----- Reason -----');
-	console.log(reason);
-	console.log('----- Status -----');
+wss.on('connection', (ws) => {
+    console.log('Client connected');
+    ws.on('message', (message) => {
+        console.log('Received message:', message);
+        // Process incoming messages from clients
+    });
 });
 
 process.on('message', (message) => {
-	if (message.update === 'sensor') {
-		sensor = message.data;
-		console.log('Connection prepared for', sensor);
-		
-		resolveInitialData();
-	} else if (message.update === 'command') {
-		command = message.data;
-		console.log('Command to be executed for', sensor);
-	}
-	else if (message.update === 'snapImage') {
-        saveImage(); 
+    if (message.update === 'sensor') {
+        sensor = message.data;
+        console.log('Connection prepared for', sensor);
+
+        if (port) {
+            // Close existing port if open
+            port.close();
+        }
+
+        // Initialize serial port
+        port = new SerialPort({
+            path: sensor.port,
+            baudRate: 2000000,
+        });
+
+        parser = port.pipe(new ReadlineParser({ delimiter: "\n" }));
+
+        parser.on("data", (data) => {
+            // Process the data and send it to the WebSocket clients
+			let img = data;//Buffer.from(Uint8Array.from(data)).toString('base64');
+			counter++;
+			sensor.image = img;
+			process.send({ update: 'sensor', data: sensor });
+			
+        });
+    } else if (message.update === 'command') {
+        command = message.data;
+        console.log('Command to be executed for', sensor);
+    }
+    else if (message.update === 'snapImage') {
+        saveImage();
     }
 });
 
@@ -88,45 +96,7 @@ function saveImage() {
 }
 
 async function main() {
-	await initialDataReceived;
-	if (!sensor || !sensor.port) {
-		console.error('Sensor or sensor port is not defined');
-		process.exit();
-	}
-	// Save an image every minute
-	// setInterval(saveImage, 60000);
-
-
-	const server = new WebSocket.Server({ port: sensor.port }, () => console.log(`WS Server is listening at ${sensor.port}`));
-	server.on('connection', (ws) => {
-		console.log('Client connected: ' + ws._socket.remoteAddress);
-		ws.on('message', async (data) => {
-			if (ws.readyState !== ws.OPEN) return;
-			
-			if (command) {
-				ws.send(command);
-				command = null;
-			}
-			
-			if (typeof data === 'object') {
-				// Get the current time
-				const now = Date.now();
-		  
-				// If enough time has passed since the last frame
-				if (now - lastFrameTime >= frameDelay) {
-				  // Process the frame
-				  let img = Buffer.from(Uint8Array.from(data)).toString('base64');
-				  counter++;
-				  sensor.image = img;
-				  console.log('Frame received from ' + ws._socket.remoteAddress + ' ' + counter);		  
-				  // Update the time of the last processed frame
-				  lastFrameTime = now;
-				}
-			  }
-			// send to the client the image data
-			process.send({ update: 'sensor', data: sensor });
-		});
-	});
+    console.log('Application started');
 }
 
 main();

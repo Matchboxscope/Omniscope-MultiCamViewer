@@ -8,12 +8,13 @@ const os = require("os");
 const globalSensorData = require("./global-sensor-data");
 const { Mutex } = require('async-mutex');
 const mutex = new Mutex();
+const { SerialPort } = require("serialport");
 
 const http = require("http");
 const dgram = require("dgram");
 const bodyParser = require("body-parser");
 const fs = require("fs");
-
+const HTTP_PORT = 8000;
 // Load the sensor configurations if available
 const FILE_PATH = "sensors.json"; // Specify the path to your JSON file
 let sensors;
@@ -26,14 +27,31 @@ try {
   fs.writeFileSync(FILE_PATH, JSON.stringify(sensors));
 }
 
+// now we want to scan all serial ports 
+function listSerialPorts() {
+  return new Promise((resolve, reject) => {
+    SerialPort.list()
+      .then(ports => {
+        const usbPorts = ports.filter(port => port.manufacturer);
+        resolve(usbPorts);
+      })
+      .catch(err => {
+        reject(err);
+      });
+  });
+}
 
+const allSerialPorts = listSerialPorts()
+
+
+
+// launch the backend server for the react app
 const app = express();
 app.use("/static", express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '../client/build')));
 
 const connectedClients = new Set();
-const HTTP_PORT = 8000;
 const updateFrequency = 200;
 
 // Define the maximum number of child processes
@@ -45,10 +63,9 @@ let childProcessCount = 0;
 // For moving stage and turning on/off light
 let stageSocket = null;
 
-
+// attach camera sensors
 cluster.setupPrimary({ exec: path.join(__dirname, "sensor.js") });
 const workers = new Map();
-
 const sensorsArray = Object.entries(sensors).map(([key, value]) => ({
   key,
   ...value,
@@ -57,6 +74,13 @@ Object.assign(
   globalSensorData,
   Object.fromEntries(sensorsArray.map((sensor) => [sensor.key, sensor]))
 );
+
+// for all ports, launch the worker
+//handleStage(port, uniqueCamId);
+const port = "/dev/cu.usbmodem1101";
+const  uniqueCamId = 1;
+handleCamera(port, uniqueCamId);
+
 
 // Assuming `workers` is a Map where the keys are worker IDs and the values are worker objects
 function deleteWorker(workerId) {
@@ -208,88 +232,10 @@ wss.on("connection", (ws) => {
   });
 });
 
-// IP Broadcasting
-const BROADCAST_PORT = 12345;
-const BROADCAST_ADDR = "255.255.255.255";
-
-// Function to get server IP
-function getServerIP(desiredInterfaceName) {
-  const ifaces = os.networkInterfaces();
-  // get all names of the ifaces
-  let serverIP = "127.0.0.1";
-
-  for (let ifname in ifaces) {
-    if (ifname === desiredInterfaceName) {
-      const iface = ifaces[ifname].find((iface) => iface.family === "IPv4" && !iface.internal);
-      if (iface) {
-        serverIP = iface.address;
-        //console.log(`Server IP: ${serverIP}`);
-        break; // Found the desired interface, exit the loop
-      }
-    }
-  }
-
-  return serverIP;
-}
-
-
-
-
-let desiredInterfaceName;
-
-switch (os.platform()) {
-  case 'win32':
-    // Windows
-    desiredInterfaceName = 'Wi-Fi';
-    break;
-  case 'darwin':
-    // MacOS
-    desiredInterfaceName = 'en0'; // This might change based on your system
-    break;
-  case 'linux':
-    // Linux
-    desiredInterfaceName = 'eth0'; // wlan0'; // This might change based on your system
-    break;
-  default:
-    console.log('Unsupported platform');
-    break;
-}
-// Create a UDP socket bound to the desired network interface's local address
-const server = dgram.createSocket("udp4");
-server.bind({
-  address: getServerIP(desiredInterfaceName),
-  port: 0, // Let the OS choose an available port
-});
-
-server.on("listening", function () {
-  server.setBroadcast(true);
-  console.log(
-    `UDP server listening on ${server.address().address}:${server.address().port}`
-  );
-  setInterval(broadcastIP, 1000); // Broadcast every 1000 ms
-});
-
-function broadcastIP() {
-  const message = Buffer.from(getServerIP(desiredInterfaceName));
-  // console.log(`Broadcasting IP address: ${message}`);
-  server.send(
-    message,
-    0,
-    message.length,
-    BROADCAST_PORT,
-    BROADCAST_ADDR,
-    function () {
-      // Broadcast callback
-    }
-  );
-}
-
 async function handleCamera(port, uniqueCamId) {
-  const currentCameraId = await appendIPToFile(port, uniqueCamId);
-  console.log(`Current camera ID: ${currentCameraId}`);
-  startWorkerForCamera(port, currentCameraId);
+  console.log(`Current camera ID: ${uniqueCamId}`);
+  startWorkerForCamera(port, uniqueCamId);
 }
-
 
 function handleStage(port, uniqueCamId) {
   const stagewss = new WebSocket.Server({ port: port });
@@ -332,29 +278,6 @@ function sendStageCommand(command) {
   }
 }
 
-// Handle POST request on /setIP
-////curl -X 'POST' 'http://192.168.0.116:8000/setIPPort' -H 'accept: application/json' -H 'Content-Type: application/json'  -d '{"ip": "192.168.1.1", "port":8001}'
-app.post("/setIPPort", (req, res) => {
-  const ip = req.body.ip;
-  const port = req.body.port;
-  if (ip) {
-    //console.log(`Received IP/port: ${ip}:${port}`);
-    const uniqueCamId = port - 8000;
-    if (uniqueCamId < 0) { // stage will have a negative ID
-      handleStage(port, uniqueCamId);
-      // Initialize the stage WebSocket server
-      //handleStage(8005, -1); // Example port and uniqueCamId
-
-      res.send({ message: "IP received and stored" });
-    }
-    else {
-      handleCamera(port, uniqueCamId);
-      res.send({ message: "IP received and stored" });
-    }
-  } else {
-    res.status(400).send({ message: "Invalid IP" });
-  }
-});
 
 // Start a new worker for the camera
 function startWorkerForCamera(port, cameraId) {
@@ -405,6 +328,8 @@ function startWorkerForCamera(port, cameraId) {
 
 
 async function appendIPToFile(newPort, newCamId) {
+ 
+ /*
   // Lock the function
   const release = await mutex.acquire();
 
@@ -441,6 +366,7 @@ async function appendIPToFile(newPort, newCamId) {
     // Release the lock
     release();
   }
+  */
 }
 
 app.get('*', (req, res) => {
