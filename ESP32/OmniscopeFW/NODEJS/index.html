@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Camera Stream</title>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const img = document.getElementById('camera-stream');
+            const ws = new WebSocket('ws://localhost:3000');
+
+            ws.onmessage = function (event) {
+                img.src = 'data:image/jpeg;base64,' + event.data;
+            };
+        });
+    </script>
+</head>
+<body>
+    <img id="camera-stream" src="" alt="Camera Stream">
+</body>
+</html>
