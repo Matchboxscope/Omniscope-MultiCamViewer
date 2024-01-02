@@ -36,6 +36,16 @@ wss.on('connection', (ws) => {
     });
 });
 
+// function to write to serial port
+function requestImage() {
+port.write('c\n', (err) => {
+    if (err) {
+    return console.log('Error on write: ', err.message);
+    }
+});
+}
+
+
 process.on('message', (message) => {
     if (message.update === 'sensor') {
         sensor = message.data;
@@ -54,12 +64,26 @@ process.on('message', (message) => {
 
         parser = port.pipe(new ReadlineParser({ delimiter: "\n" }));
 
+  
+        port.on('open', () => {
+            console.log('Port is open');
+            setInterval(() => {
+            requestImage();
+            }, 100); // Sends 'c\n' every 100ms
+        });
+  
         parser.on("data", (data) => {
             // Process the data and send it to the WebSocket clients
 			let img = data;//Buffer.from(Uint8Array.from(data)).toString('base64');
 			counter++;
-			sensor.image = img;
-			process.send({ update: 'sensor', data: sensor });
+			
+            // check if we have a valid jpeg image
+            if (img[0] == '/') {
+                //saveImage();
+                sensor.image = img;
+                process.send({ update: 'sensor', data: sensor });
+            }
+			
 			
         });
     } else if (message.update === 'command') {

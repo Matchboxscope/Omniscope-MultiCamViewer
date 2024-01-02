@@ -52,13 +52,13 @@ void initCamera()
     config.jpeg_quality = 10;
     config.fb_count = 2;
     config.grab_mode = CAMERA_GRAB_LATEST;
-    config.frame_size = FRAMESIZE_SVGA; // iFRAMESIZE_UXGA;
+    config.frame_size = FRAMESIZE_VGA; // iFRAMESIZE_UXGA;
   }
   else
   {
     log_d("NO PSRAM");
     // Limit the frame size when PSRAM is not available
-    config.frame_size = FRAMESIZE_SVGA;
+    config.frame_size = FRAMESIZE_VGA;
     config.fb_location = CAMERA_FB_IN_DRAM;
   }
 
@@ -79,28 +79,6 @@ void setup() {
 }
 
 void loop() {
-  if (!Serial.available()) return;  // if no serial bytes are available, do nothing
-
-  char c = Serial.read();
-  if (c == 'p') Serial.println("ping!");
-  // last option is to take a picture
-  if (c != 'c') return;
-  // Take picture and read the frame buffer
-  camera_fb_t * fb = esp_camera_fb_get();
-  if (!fb)
-  {
-    Serial.println("FAIL");
-  }
-  else
-  {
-    Serial.print("img:");
-    Serial.print(fb->len);
-    Serial.print(":");
-    Serial.write(fb->buf, fb->len);
-  }
-  esp_camera_fb_return(fb);
-
-
     // Your loop code
     // Your data to encode
     /*
@@ -112,10 +90,9 @@ void loop() {
     // Send over serial
     Serial.println(encodedData);
     delay(1000);
-    
+    */
    grabImage();
    delay(100);
-   */
 }
 
 

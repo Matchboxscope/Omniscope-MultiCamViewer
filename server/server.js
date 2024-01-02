@@ -77,9 +77,14 @@ Object.assign(
 
 // for all ports, launch the worker
 //handleStage(port, uniqueCamId);
-const port = "/dev/cu.usbmodem1101";
-const  uniqueCamId = 1;
-handleCamera(port, uniqueCamId);
+
+const ports = ['/dev/cu.usbmodem11101','/dev/cu.usbmodem11201', '/dev/cu.usbmodem11301', '/dev/cu.usbmodem11401']
+
+for (let i = 0; i < ports.length; i++) {
+  const port = ports[i];
+  const uniqueCamId = i + 1;
+  handleCamera(port, uniqueCamId);
+}
 
 
 // Assuming `workers` is a Map where the keys are worker IDs and the values are worker objects

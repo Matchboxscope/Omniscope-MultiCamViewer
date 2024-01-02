@@ -1,45 +1,53 @@
-//npm install express ws serialport
-const express = require("express");
-const WebSocket = require("ws");
-const http = require("http");
-const { SerialPort } = require("serialport");
-const { ReadlineParser } = require("@serialport/parser-readline");
-
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const { SerialPort } = require('serialport');
+const { DelimiterParser } = require('@serialport/parser-delimiter');
 
 const port = new SerialPort({
-  path: "/dev/cu.usbmodem1101",
-  baudRate: 2000000,
-});
-const parser = port.pipe(new ReadlineParser({ delimiter: "\n" }));
-
-app.use(express.static("public"));
-
-// Read the port data
-port.on("open", () => {
-  console.log("serial port open");
+  path: '/dev/cu.usbmodem11101',
+  baudRate: 2000000
 });
 
-parser.on("data", (data) => {
-  //console.log(data);
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(data);
+const parser = port.pipe(new DelimiterParser({ delimiter: ':' }));
+
+let imageBuffer = Buffer.alloc(0);
+
+// function to write to serial port
+function requestImage() {
+  port.write('c\n', (err) => {
+    if (err) {
+      return console.log('Error on write: ', err.message);
     }
+    console.log('message written');
   });
+}
+
+port.on('open', () => {
+  console.log('Port is open');
+  setInterval(() => {
+    requestImage();
+  }, 10000); // Sends 'c\n' every 100ms
 });
 
-wss.on("connection", (ws) => {
-  console.log("Client connected");
+parser.on('data', (data) => {
+  console.log(data.toString());
+  /*
+  if (data.toString().startsWith('img')) {
+    let size = parseInt(data.toString().slice(4), 10);
+    if (!size > 0 ) {
+      console.log('Image size is 0');
+      return;
+    }
+    imageBuffer = Buffer.alloc(size);
+  } else {
+    imageBuffer = Buffer.concat([imageBuffer, data]);
+    if (imageBuffer.length === imageBuffer.capacity) {
+      // Full image is received here
+      console.log('Image received');
+      // Handle the full image buffer here
+    }
+  }
+  */
 });
 
-server.listen(3000, () => {
-  console.log("Server started on http://localhost:3000");
-});
-
-// we also want to serve the index.html
-app.get("/", (req, res) => {
-  res.sendFile(__dirname + "/index.html");
+port.on('error', (err) => {
+  console.error('Error: ', err.message);
 });
