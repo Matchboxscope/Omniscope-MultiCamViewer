@@ -181,6 +181,8 @@ It happens that these cameras are getting fairly hot. Not using Wifi helps a lot
 *Camera Array:*
 ![Title](IMAGES/FLIR_20231012_121618_472.jpg)
 
+*Single Camera /wo WiFi
+![Title](IMAGES/FLIR_20231012_121949_366.jpg)
 ## Errors:
 
 ```
