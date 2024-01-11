@@ -3,7 +3,7 @@
 #include <base64.h>
 #ifdef CAMERA_MODEL_XIAO
 #include "esp_camera.h"
-#endif 
+#endif
 #include "camera_pins.h"
 
 #ifdef CAMERA_MODEL_XIAO
@@ -46,21 +46,16 @@ void initCamera()
   */
   // if PSRAM IC present, init with UXGA resolution and higher JPEG quality
   //                      for larger pre-allocated frame buffer.
-  if (psramFound())
+  if (!psramFound())
   {
-    Serial.println("PSRAM FOUND");
-    config.jpeg_quality = 10;
-    config.fb_count = 2;
-    config.grab_mode = CAMERA_GRAB_LATEST;
-    config.frame_size = FRAMESIZE_SVGA; // iFRAMESIZE_UXGA;
+    Serial.println("PSRAM NOT FOUND");
+    ESP.restart();
   }
-  else
-  {
-    log_d("NO PSRAM");
-    // Limit the frame size when PSRAM is not available
-    config.frame_size = FRAMESIZE_SVGA;
-    config.fb_location = CAMERA_FB_IN_DRAM;
-  }
+  // Serial.println("PSRAM FOUND");
+  config.jpeg_quality = 10;
+  config.fb_count = 2;
+  config.grab_mode = CAMERA_GRAB_LATEST;
+  config.frame_size = FRAMESIZE_VGA; // FRAMESIZE_SVGA; // iFRAMESIZE_UXGA;
 
   // camera init
   esp_err_t err = esp_camera_init(&config);
@@ -69,70 +64,80 @@ void initCamera()
     log_e("Camera init failed with error 0x%x", err);
     ESP.restart();
   }
+  //Serial.println("Camera init success!");
 }
 #endif
 
+long startTime = 0;
 
-void setup() {
+void setup()
+{
+  startTime = millis();
   Serial.begin(2000000);
   initCamera();
 }
 
-void loop() {
-  if (!Serial.available()) return;  // if no serial bytes are available, do nothing
-
-  char c = Serial.read();
-  if (c == 'p') Serial.println("ping!");
-  // last option is to take a picture
-  if (c != 'c') return;
-  // Take picture and read the frame buffer
-  camera_fb_t * fb = esp_camera_fb_get();
-  if (!fb)
+void loop()
+{
+  // periodically reboot at random times in case serial connection is lost
+  if (millis() - startTime > random(30000, 60000))
   {
-    Serial.println("FAIL");
+    // cut the line for 0.5 second by deepsleep to force a reboot
+    esp_sleep_enable_timer_wakeup(500000);
+    esp_deep_sleep_start();
+  }
+
+  if (Serial.available())
+  {
+    //
+    char c = Serial.read();
+    if (c == 'p')
+      Serial.println("ping!");
+    if (c == 'r')
+      ESP.restart();
+    if (c == 's'){
+      esp_sleep_enable_timer_wakeup(500000);
+      esp_deep_sleep_start();
+    }
+    if (c=='t'){
+      // return compile time
+      Serial.println(__DATE__ " " __TIME__);
+    }
+    if (c == 'c')
+    {
+      startTime = millis();
+
+      // Take picture and read the frame buffer
+      camera_fb_t *fb = esp_camera_fb_get();
+      if (!fb)
+      {
+        Serial.println("FAIL");
+      }
+      else
+      {
+        String encoded = base64::encode(fb->buf, fb->len);
+        Serial.write(encoded.c_str(), encoded.length());
+        Serial.println();
+      }
+      esp_camera_fb_return(fb);
+    }
+  }
+}
+
+/*
+void grabImage()
+{
+
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb || fb->format != PIXFORMAT_JPEG)
+  {
   }
   else
   {
-    /*
-    Serial.print("img:");
-    Serial.print(fb->len);
-    Serial.print(":");
-    Serial.write(fb->buf, fb->len);
-    */
     String encoded = base64::encode(fb->buf, fb->len);
-    Serial.write(encoded.c_str(), encoded.length());    
-    Serial.println();
-  }
-  esp_camera_fb_return(fb);
-
-
-    // Your loop code
-    // Your data to encode
-    /*
-    String data = "Hello, World!";
-    
-    // Encode to base64
-    String encodedData = base64::encode(data);
-    
-    // Send over serial
-    Serial.println(encodedData);
-    delay(1000);
-    
-   grabImage();
-   delay(100);
-   */
-}
-
-
-void grabImage(){
-
-  camera_fb_t* fb = esp_camera_fb_get();
-  if(!fb || fb->format != PIXFORMAT_JPEG){}
-  else{  
-    String encoded = base64::encode(fb->buf, fb->len);
-    Serial.write(encoded.c_str(), encoded.length());    
+    Serial.write(encoded.c_str(), encoded.length());
     Serial.println();
   }
   esp_camera_fb_return(fb);
 }
-
+*/
