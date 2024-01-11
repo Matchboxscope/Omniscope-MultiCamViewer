@@ -6,7 +6,7 @@ const WebSocket = require("ws");
 const cluster = require("cluster");
 const os = require("os");
 const globalSensorData = require("./global-sensor-data");
-const { Mutex } = require('async-mutex');
+const { Mutex } = require("async-mutex");
 const mutex = new Mutex();
 const { SerialPort } = require("serialport");
 
@@ -27,29 +27,11 @@ try {
   fs.writeFileSync(FILE_PATH, JSON.stringify(sensors));
 }
 
-// now we want to scan all serial ports 
-function listSerialPorts() {
-  return new Promise((resolve, reject) => {
-    SerialPort.list()
-      .then(ports => {
-        const usbPorts = ports.filter(port => port.manufacturer);
-        resolve(usbPorts);
-      })
-      .catch(err => {
-        reject(err);
-      });
-  });
-}
-
-const allSerialPorts = listSerialPorts()
-
-
-
 // launch the backend server for the react app
 const app = express();
 app.use("/static", express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, '../client/build')));
+app.use(express.static(path.join(__dirname, "../client/build")));
 
 const connectedClients = new Set();
 const updateFrequency = 200;
@@ -78,14 +60,37 @@ Object.assign(
 // for all ports, launch the worker
 //handleStage(port, uniqueCamId);
 
-const ports = ['/dev/cu.usbmodem11101','/dev/cu.usbmodem11201', '/dev/cu.usbmodem11301', '/dev/cu.usbmodem11401']
+if (1) {
+  const ports =   ['/dev/cu.usbmodem11141101', '/dev/cu.usbmodem1111101', '/dev/cu.usbmodem1111201', '/dev/cu.usbmodem11144201', '/dev/cu.usbmodem11144401', '/dev/cu.usbmodem1113101', '/dev/cu.usbmodem1113201', '/dev/cu.usbmodem1111301', '/dev/cu.usbmodem11144101', '/dev/cu.usbmodem11142201', '/dev/cu.usbmodem11141401', '/dev/cu.usbmodem1113301', '/dev/cu.usbmodem1112401', '/dev/cu.usbmodem11141201', '/dev/cu.usbmodem1113401', '/dev/cu.usbmodem11141301', '/dev/cu.usbmodem1112201', '/dev/cu.usbmodem11144301', '/dev/cu.usbmodem11142401', '/dev/cu.usbmodem1112101', '/dev/cu.usbmodem11142101', '/dev/cu.usbmodem11142301', '/dev/cu.usbmodem1112301', '/dev/cu.usbmodem1111401'];
+  for (let i = 0; i < ports.length; i++) {
+    const port = ports[i];
+    const uniqueCamId = i + 1;
+    handleCamera(port, uniqueCamId);
+  }
+} else {
+  let portList = [];
+  SerialPort.list().then((ports) => {
+    portList = ports.map((port) => {
+      return {
+        path: port.path,
+        manufacturer: port.manufacturer,
+      };
+    });
+    console.log("Available Serial Ports:", portList);
 
-for (let i = 0; i < ports.length; i++) {
-  const port = ports[i];
-  const uniqueCamId = i + 1;
-  handleCamera(port, uniqueCamId);
+    let filteredPortList = portList.filter((port) =>
+      port.path.startsWith("/dev/tty.usbmodem")
+    );
+
+    // Now, portList contains all the serial port information
+    // start the workers for all the cameras
+    for (let i = 0; i < filteredPortList.length; i++) {
+      const port = filteredPortList[i].path;
+      const uniqueCamId = i + 1;
+      handleCamera(port, uniqueCamId);
+    }
+  });
 }
-
 
 // Assuming `workers` is a Map where the keys are worker IDs and the values are worker objects
 function deleteWorker(workerId) {
@@ -95,7 +100,7 @@ function deleteWorker(workerId) {
     worker.removeAllListeners();
 
     // If the worker is a child process, kill it
-    if (typeof worker.kill === 'function') {
+    if (typeof worker.kill === "function") {
       worker.kill();
     }
 
@@ -163,15 +168,13 @@ wss.on("connection", (ws) => {
       }
       if (data.operation == "snapAllCameras") {
         await new Promise((resolve) => setTimeout(resolve, 500));
-        sendStageCommand('ILLUMINATION=100');
+        sendStageCommand("ILLUMINATION=100");
 
         for (let [worker, _] of workers) {
           worker.send({ update: "snapImage" });
-
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
-        sendStageCommand('ILLUMINATION=0');
-
+        sendStageCommand("ILLUMINATION=0");
       }
       if (data.operation === "reloadCameras") {
         // reannounce all cameras that are stored in the sensors.json file
@@ -201,7 +204,7 @@ wss.on("connection", (ws) => {
         for (let [worker, _, __] of workers) {
           worker.kill();
           deleteWorker(worker.id);
-          childProcessCount=0;
+          childProcessCount = 0;
         }
       }
 
@@ -211,22 +214,20 @@ wss.on("connection", (ws) => {
         // To send a command
         command = "MOVE_FOCUS=" + String(data.value);
         sendStageCommand(command);
-
       }
 
       if (data.operation == "turnIlluminationON") {
         // we need to send a message to the stage worker to turn on the illumination
         // To send a command
-        sendStageCommand('ILLUMINATION=100');
+        sendStageCommand("ILLUMINATION=100");
       }
 
       if (data.operation == "turnIlluminationOFF") {
         // we need to send a message to the stage worker to turn off the illumination
         // To send a command
-        sendStageCommand('ILLUMINATION=0');
+        sendStageCommand("ILLUMINATION=0");
       }
-
-    } catch (error) { }
+    } catch (error) {}
   });
 
   ws.on("close", () => {
@@ -245,27 +246,27 @@ async function handleCamera(port, uniqueCamId) {
 function handleStage(port, uniqueCamId) {
   const stagewss = new WebSocket.Server({ port: port });
 
-  stagewss.on('connection', function connection(ws) {
-    console.log('Stage connected');
+  stagewss.on("connection", function connection(ws) {
+    console.log("Stage connected");
     stageSocket = ws;
 
-    ws.on('message', function incoming(message) {
-      console.log('Received message from stage:', message);
+    ws.on("message", function incoming(message) {
+      console.log("Received message from stage:", message);
       // Handle incoming messages as necessary
     });
 
-    ws.on('close', function close() {
-      console.log('Stage disconnected');
+    ws.on("close", function close() {
+      console.log("Stage disconnected");
       stageSocket = null;
     });
   });
 
-  stagewss.on('listening', () => {
+  stagewss.on("listening", () => {
     console.log(`Stage WebSocket Server is listening on port ${port}`);
   });
 
-  stagewss.on('error', function error(err) {
-    console.error('Stage WebSocket Server error:', err);
+  stagewss.on("error", function error(err) {
+    console.error("Stage WebSocket Server error:", err);
   });
 }
 
@@ -273,19 +274,18 @@ function sendStageCommand(command) {
   if (stageSocket && stageSocket.readyState === WebSocket.OPEN) {
     stageSocket.send(command, (err) => {
       if (err) {
-        console.error('Error sending command to stage:', err);
+        console.error("Error sending command to stage:", err);
       } else {
         console.log(`Command sent to stage: ${command}`);
       }
     });
   } else {
-    console.log('No stage connection available to send command.');
+    console.log("No stage connection available to send command.");
   }
 }
 
-
 // Start a new worker for the camera
-function startWorkerForCamera(port, cameraId) {
+async function startWorkerForCamera(port, cameraId) {
   // if workers has port/cameraID of the new incoming one, kill the one with same port/cameraID
   const isPortInWorkers = Array.from(workers.values()).some(
     (workerPort) => workerPort === port
@@ -323,18 +323,13 @@ function startWorkerForCamera(port, cameraId) {
     });
     workers.set(worker, port, cameraId);
     console.log(`Started worker for camera ${cameraId} on port ${port}`);
-
-  }
-  else {
+  } else {
     console.log("Max child processes reached");
   }
 }
 
-
-
 async function appendIPToFile(newPort, newCamId) {
- 
- /*
+  /*
   // Lock the function
   const release = await mutex.acquire();
 
@@ -374,8 +369,8 @@ async function appendIPToFile(newPort, newCamId) {
   */
 }
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../client/build", "index.html"));
 });
 
 // send a simple test response if the server is up and running

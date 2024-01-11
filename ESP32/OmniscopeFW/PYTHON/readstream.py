@@ -1,25 +1,19 @@
 import sys
-
+import numpy as np
 import cv2
 import numpy
 import serial
+import base64
 
 
-port = '/dev/cu.usbmodem11101'
-if len(sys.argv) > 1:
-    port = sys.argv[1]
 baud = 2000000
 
 
 def grab_image(conn):
     try:
         conn.write(b"c\n");
-        b = conn.read(4)
-        assert b == b'img:'
-        buf = conn.read_until(b':')
-        print(f"read: {buf}")
-        n = int(buf[:-1])
-        img_buf = conn.read(n)
+        img_buf = conn.readline()
+        print(img_buf)
         return img_buf
     except Exception as e:
         print(conn.port + str(e))
@@ -27,31 +21,49 @@ def grab_image(conn):
 
 
 def buf_to_img(buf):
-    arr = numpy.frombuffer(buf, dtype='uint8')
-    return cv2.imdecode(arr, flags=1)
+    # Decode the Base64-encoded frame
+    decoded_frame = base64.b64decode(buf)
+
+    # Convert to a NumPy array and decode image
+    nparr = np.frombuffer(decoded_frame, np.uint8)
+    if np.squeeze(nparr.shape)>0:
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        return image
 
 mConns = {}
-ports = ['/dev/cu.usbmodem11101', '/dev/cu.usbmodem11201', '/dev/cu.usbmodem11301', '/dev/cu.usbmodem11401']
-if __name__ == '__main__':
-    cv2.namedWindow('win')
-    i = 0
-    for port in ports:
-        mConns[port] = serial.Serial(port, baud)
-    
-    while True:
-        for port in ports:
-            conn = mConns[port]
-            
-            buf = grab_image(conn)
-            if buf is None:
-                continue
-            im = buf_to_img(buf)
-            cv2.imshow(port, im)
-            k = cv2.waitKey(10)
-            print(k)
-            if k == ord('c'):
-                #cv2.imwrite(f'image_{i}.jpg', im)
-                i += 1
-                continue
-            if k == ord('q'):
-                break
+import serial.tools.list_ports
+
+ports = serial.tools.list_ports.comports()
+mDevices = []
+for port in ports:
+    mDevice = port.device
+    if mDevice.find('modem') >= 0:
+        mDevices.append(port.device)
+print(mDevices)
+print(len(mDevices))
+ports = mDevices# ['/dev/cu.usbmodem11143101', '/dev/cu.usbmodem11143301', '/dev/cu.usbmodem11144101', '/dev/cu.usbmodem11143201', '/dev/cu.usbmodem11143401', '/dev/cu.usbmodem11144201', '/dev/cu.usbmodem11144401', '/dev/cu.usbmodem11144301', '/dev/cu.usbmodem11142101', '/dev/cu.usbmodem11142301', '/dev/cu.usbmodem11142401', '/dev/cu.usbmodem11142201']
+
+#ports = ports[0:4]
+# start the stream
+readyPorts = []
+for port in ports:
+    try:
+        mConns[port] = serial.Serial(port, baud, write_timeout=0.5, timeout=0.5)
+        readyPorts.append(port)
+        print("Connected to " + port)
+    except Exception as e:print(e); continue
+
+
+while True:
+    for port in readyPorts:
+        conn = mConns[port]
+        print("reading from " + port)
+       
+        buf = grab_image(conn)
+        if buf is None:
+            continue
+        im = buf_to_img(buf)
+        if im is None:
+            continue
+        cv2.imshow(port, im)
+        k = cv2.waitKey(10)

@@ -8,9 +8,7 @@ let sensor;
 let command = null;
 let port;
 let parser;
-let validEntities = [];
 let counter = 0;
-let lastFrameTime = 0;
 let frameDelay = 200; // ms
 
 const imagesPath = path.join(__dirname, 'images');
@@ -32,7 +30,6 @@ wss.on('connection', (ws) => {
     console.log('Client connected');
     ws.on('message', (message) => {
         console.log('Received message:', message);
-        // Process incoming messages from clients
     });
 });
 
@@ -61,17 +58,17 @@ process.on('message', (message) => {
             path: sensor.port,
             baudRate: 2000000,
         });
-
+        // Initialize parser to read lines as frames
         parser = port.pipe(new ReadlineParser({ delimiter: "\n" }));
 
-  
+        // open the port 
         port.on('open', () => {
             console.log('Port is open');
             setInterval(() => {
             requestImage();
-            }, 100); // Sends 'c\n' every 100ms
+            }, frameDelay+Math.floor(Math.random() * 200)); // Sends 'c\n' every 100ms
         });
-  
+        // Read data from the serial port
         parser.on("data", (data) => {
             // Process the data and send it to the WebSocket clients
 			let img = data;//Buffer.from(Uint8Array.from(data)).toString('base64');
@@ -82,6 +79,7 @@ process.on('message', (message) => {
                 //saveImage();
                 sensor.image = img;
                 process.send({ update: 'sensor', data: sensor });
+                //console.log('Image received from', sensor);
             }
 			
 			
