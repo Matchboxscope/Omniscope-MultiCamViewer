@@ -176,10 +176,10 @@ All camera frames will be stored periodically in the folder: `./server/saved_ima
 It happens that these cameras are getting fairly hot. Not using Wifi helps a lot:
 
 *Single Camera:*
-[Title](IMAGES/FLIR_20231012_121418_802.jpg) 
+![Title](IMAGES/FLIR_20231012_121418_802.jpg) 
 
 *Camera Array:*
-[Title](IMAGES/FLIR_20231012_121618_472.jpg)
+![Title](IMAGES/FLIR_20231012_121618_472.jpg)
 
 ## Errors:
 
