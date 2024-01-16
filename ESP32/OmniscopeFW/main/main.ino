@@ -6,6 +6,7 @@
 #endif
 #include "camera_pins.h"
 
+#define BAUDRATE 500000
 #ifdef CAMERA_MODEL_XIAO
 void initCamera()
 {
@@ -70,15 +71,38 @@ void initCamera()
 
 long startTime = 0;
 
+
+int lastBlink = 0;
+int blinkState = 0;
+int blinkPeriod = 500;
+
+
 void setup()
 {
   startTime = millis();
-  Serial.begin(2000000);
+  Serial.begin(BAUDRATE);
   initCamera();
+  pinMode(LED_BUILTIN, OUTPUT);
 }
+
+
 
 void loop()
 {
+
+  
+    // blink the LED
+  if (millis() - lastBlink > blinkPeriod)
+  {
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(50);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(50);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(50);    
+    lastBlink = millis();
+  }
+  
   // periodically reboot at random times in case serial connection is lost
   if (millis() - startTime > random(30000, 60000))
   {
@@ -105,6 +129,10 @@ void loop()
     }
     if (c == 'c')
     {
+      digitalWrite(LED_BUILTIN, LOW);
+      delay(50);
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(200);
       startTime = millis();
 
       // Take picture and read the frame buffer
@@ -118,6 +146,13 @@ void loop()
         String encoded = base64::encode(fb->buf, fb->len);
         Serial.write(encoded.c_str(), encoded.length());
         Serial.println();
+        for(int i=0; i<4; i++){
+          digitalWrite(LED_BUILTIN, LOW);
+          delay(50);
+          digitalWrite(LED_BUILTIN, HIGH);
+          delay(50);
+        }
+        
       }
       esp_camera_fb_return(fb);
     }

@@ -6,13 +6,27 @@ import serial
 import base64
 
 
-baud = 2000000
+baud = 500000
 
 
 def grab_image(conn):
     try:
+        if 0:
+            # close the device - similar to hard reset
+            conn.setDTR(False)
+            conn.setRTS(True)
+            time.sleep(.1)
+            conn.setDTR(False)
+            conn.setRTS(False)
+            time.sleep(.1)
+            while 1:
+                rLine = conn.readline()
+                print(rLine)
+                if rLine == b'':
+                    break
         conn.write(b"c\n")
         img_buf = conn.readline()
+        #print(img_buf)
         image = buf_to_img(img_buf)
         if image is None:
             conn.write(b"s\n")
@@ -61,7 +75,9 @@ for port in ports:
 while True:
     for port in ports:
         try:
-            conn = serial.Serial(port, baud, write_timeout=0.5, timeout=0.5)
+            import time
+            conn = serial.Serial(port, baud, write_timeout=0.5, timeout=1)
+
             
         
             image = grab_image(conn)
