@@ -199,7 +199,7 @@ void loop()
     Serial.print("[HTTP] POST...\n");
     // start connection and send HTTP header
     int httpCode = http.sendRequest("POST", (uint8_t *)&macInt, sizeof(macInt)); // we simply put the whole image in the post body.
-
+    lastAnnounced = millis();
   }
 
   if (millis() - lastUpload > uploadPeriod)
@@ -207,8 +207,6 @@ void loop()
     // Send image to server
     camera_fb_t *fb = esp_camera_fb_get();
 
-
-  
     HTTPClient http;
     Serial.println("Upload");
 
@@ -236,6 +234,8 @@ void loop()
 
     http.end(); // Free up memory
     esp_camera_fb_return(fb);
+
+    lastUpload = millis();
   }
 
   // periodically reboot at random times in case serial connection is lost

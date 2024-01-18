@@ -6,6 +6,50 @@ import os
 
 app = Flask(__name__)
 
+
+import socket
+import time
+import threading 
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import uvicorn
+
+
+ip_list = []  # List to store the IP addresses
+
+class IPModel(BaseModel):
+    ip: str
+
+
+def get_ip():
+    """ Get the primary IP address of the machine. """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+
+def broadcast_ip(broadcastMessage, port):
+    """ Broadcasts the server IP address on the given port. """
+    server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
+    # Set a timeout so the socket does not block indefinitely when trying to receive data.
+    server.settimeout(0.2)
+    message = broadcastMessage.encode('utf-8')
+    while True:
+        server.sendto(message, ('<broadcast>', port))
+        #print(f"Message broadcasted: {ip}")
+        time.sleep(5)
+
+
+    
 '''
 logging.basicConfig(level=logging.DEBUG) #for better debuging, we will log out every request with headers and body.
 @app.before_request
@@ -14,10 +58,11 @@ def log_request_info():
     logging.info('Body: %s', request.get_data())
 '''
 
-@app.route("/port")
+@app.route("/port", methods=["GET", "POST"])
 def port():
-    print(request.remote_addr)
-    print(request.get_data())
+    mData = request.get_data()
+    integer = int.from_bytes(mData, byteorder='big')  # Use 'little' for little-endian
+    print(integer)    
     return "5001"
 
 @app.route("/upload", methods=["GET", "POST"])
@@ -31,9 +76,6 @@ def upload():
         f = open(save_location, 'wb') # wb for write byte data in the file instead of string
         f.write(image_raw_bytes) #write the bytes from the request body to the file
         f.close()
-
-        print("Image saved")
-
         return "image saved"
 
     if request.method == "GET": #if we make a get request (for example with a browser) show the image.
@@ -41,4 +83,15 @@ def upload():
         return render_template("image_show.html")
     return "if you see this, that is bad request method"
 
-app.run(host='0.0.0.0', port=5001)
+port = 12345
+ip = get_ip()
+braodcastMessage = "http://"+ip+":5001"
+print(f"Server IP: {ip}")
+print(f"BroadcastMessage: {braodcastMessage}")
+mThread = threading.Thread(target=broadcast_ip, args=(braodcastMessage, port))
+mThread.start()
+#uvicorn.run(app, host="0.0.0.0", port=4444)
+app.run(host='0.0.0.0', port=5001, debug=False)
+mThread.join()
+
+    
