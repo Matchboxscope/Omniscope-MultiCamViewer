@@ -60,37 +60,50 @@ Object.assign(
 // for all ports, launch the worker
 //handleStage(port, uniqueCamId);
 
-if (1) {
-  const ports =   ['/dev/cu.usbmodem11141101', '/dev/cu.usbmodem1111101', '/dev/cu.usbmodem1111201', '/dev/cu.usbmodem11144201', '/dev/cu.usbmodem11144401', '/dev/cu.usbmodem1113101', '/dev/cu.usbmodem1113201', '/dev/cu.usbmodem1111301', '/dev/cu.usbmodem11144101', '/dev/cu.usbmodem11142201', '/dev/cu.usbmodem11141401', '/dev/cu.usbmodem1113301', '/dev/cu.usbmodem1112401', '/dev/cu.usbmodem11141201', '/dev/cu.usbmodem1113401', '/dev/cu.usbmodem11141301', '/dev/cu.usbmodem1112201', '/dev/cu.usbmodem11144301', '/dev/cu.usbmodem11142401', '/dev/cu.usbmodem1112101', '/dev/cu.usbmodem11142101', '/dev/cu.usbmodem11142301', '/dev/cu.usbmodem1112301', '/dev/cu.usbmodem1111401'];
+if (0) {
+  const ports = [
+    "/dev/cu.usbmodem1111101",
+    "/dev/cu.usbmodem1111301",
+    "/dev/cu.usbmodem1112201",
+    "/dev/cu.usbmodem1112401",
+    "/dev/cu.usbmodem1112301",
+    "/dev/cu.usbmodem1113101",
+    "/dev/cu.usbmodem1113401",
+    "/dev/cu.usbmodem1111401",
+    "/dev/cu.usbmodem1113201",
+    "/dev/cu.usbmodem1112101",
+    "/dev/cu.usbmodem1113301",
+    "/dev/cu.usbmodem1111201",
+  ];
   for (let i = 0; i < ports.length; i++) {
     const port = ports[i];
     const uniqueCamId = i + 1;
     handleCamera(port, uniqueCamId);
   }
-} else {
-  let portList = [];
-  SerialPort.list().then((ports) => {
-    portList = ports.map((port) => {
-      return {
-        path: port.path,
-        manufacturer: port.manufacturer,
-      };
-    });
-    console.log("Available Serial Ports:", portList);
-
-    let filteredPortList = portList.filter((port) =>
-      port.path.startsWith("/dev/tty.usbmodem")
-    );
-
-    // Now, portList contains all the serial port information
-    // start the workers for all the cameras
-    for (let i = 0; i < filteredPortList.length; i++) {
-      const port = filteredPortList[i].path;
-      const uniqueCamId = i + 1;
-      handleCamera(port, uniqueCamId);
-    }
-  });
 }
+var portList = [];
+
+SerialPort.list().then((ports) => {
+  portList = ports.map((port) => {
+    return {
+      path: port.path,
+      manufacturer: port.manufacturer,
+    };
+  });
+  console.log("Available Serial Ports:", portList);
+
+  let filteredPortList = portList.filter((port) =>
+    port.path.startsWith("/dev/tty.usbmodem")
+  );
+
+  // Now, portList contains all the serial port information
+  // start the workers for all the cameras
+  for (let i = 0; i < filteredPortList.length; i++) {
+    const port = filteredPortList[i].path;
+    const uniqueCamId = i + 1;
+    handleCamera(port, uniqueCamId);
+  }
+});
 
 // Assuming `workers` is a Map where the keys are worker IDs and the values are worker objects
 function deleteWorker(workerId) {
@@ -98,14 +111,22 @@ function deleteWorker(workerId) {
   if (worker) {
     // Remove all event listeners attached to the worker
     worker.removeAllListeners();
-
+    console.log(`Killing worker ${workerId}`);
     // If the worker is a child process, kill it
     if (typeof worker.kill === "function") {
       worker.kill();
     }
 
     // Delete the worker from the Map
+    const mPort = worker.port; // store for later 
+    const mCameraId = worker.cameraId; // store for later
     workers.delete(workerId);
+    // spin up a new worker for the same port and cameraId
+    handleCamera(port, uniqueCamId);
+
+    // now we would need to try to reassign the camera to another worker
+    // the port would be the same, let's try to create a new worker
+    
   }
 }
 
@@ -316,9 +337,20 @@ async function startWorkerForCamera(port, cameraId) {
         display: "Cam#" + String(cameraId),
       },
     });
+    // add metadata
+    worker.port=port;
+    worker.cameraId=cameraId;
+    worker.key=cameraId;
+
     worker.on("message", (message) => {
       if (message.update === "sensor") {
-        updateSensors(message.data);
+        if (message.data.image==-1) {
+          console.log("Image reception timed out, Killing worker.");
+          deleteWorker(worker.id);
+        }
+        else{
+          updateSensors(message.data);
+        }
       }
     });
     workers.set(worker, port, cameraId);
@@ -326,47 +358,6 @@ async function startWorkerForCamera(port, cameraId) {
   } else {
     console.log("Max child processes reached");
   }
-}
-
-async function appendIPToFile(newPort, newCamId) {
-  /*
-  // Lock the function
-  const release = await mutex.acquire();
-
-  try {
-    console.log("Appending to file");
-    let currentCameraId = 0;
-    let data = await fs.promises.readFile(FILE_PATH, "utf8");
-    let sensors = !data ? {} : JSON.parse(data);
-    // Add new camera if it doesn't already exist
-    if (!sensors[newCamId]) {
-      currentCameraId = Object.keys(sensors).length + 1;
-      console.log(`New camera ${newCamId} added to ${FILE_PATH}`);
-      sensors[newCamId] = {
-        port: newPort,
-        class: "cam-instance",
-        display: `Cam#${currentCameraId}`,
-        id: `${currentCameraId}`,
-      };
-    } else {
-      currentCameraId = sensors[newCamId].id;
-      console.log(
-        `Camera ${newCamId} already exists in ${FILE_PATH} with ID ${currentCameraId}`
-      );
-      // Update IP if camera already exists
-      sensors[newCamId].port = newPort;
-    }
-    // Write to file
-    await fs.promises.writeFile(FILE_PATH, JSON.stringify(sensors, null, 2));
-    console.log(
-      `New camera ${newCamId} with IP ${newPort} added to ${FILE_PATH}`
-    );
-    return currentCameraId;
-  } finally {
-    // Release the lock
-    release();
-  }
-  */
 }
 
 app.get("*", (req, res) => {

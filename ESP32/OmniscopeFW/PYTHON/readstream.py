@@ -4,6 +4,7 @@ import cv2
 import numpy
 import serial
 import base64
+import time
 
 
 baud = 500000
@@ -62,7 +63,7 @@ ports = mDevices# ['/dev/cu.usbmodem11143101', '/dev/cu.usbmodem11143301', '/dev
 
 #ports = ports[0:4]
 # start the stream
-'''
+
 readyPorts = []
 for port in ports:
     try:
@@ -70,16 +71,11 @@ for port in ports:
         readyPorts.append(port)
         print("Connected to " + port)
     except Exception as e:print(e); continue
-'''
 
 while True:
     for port in ports:
         try:
-            import time
-            conn = serial.Serial(port, baud, write_timeout=0.5, timeout=1)
-
-            
-        
+            conn = mConns[port]# serial.Serial(port, baud, write_timeout=0.5, timeout=1)
             image = grab_image(conn)
             if image is None:
                 print("not reading from " + port)

@@ -5,11 +5,17 @@
 #include "esp_camera.h"
 #endif
 #include "camera_pins.h"
+#include <esp_task_wdt.h>
+#include "soc/soc.h"                      // disable brownout detector
+#include "soc/rtc_cntl_reg.h"             // disable brownout detector
+
 
 #define BAUDRATE 500000
 #ifdef CAMERA_MODEL_XIAO
-void initCamera()
+void  initCamera()
 {
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable brownout detector (Fehler bei WiFi Anmeldung beheben)
+  
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -81,8 +87,22 @@ void setup()
 {
   startTime = millis();
   Serial.begin(BAUDRATE);
-  initCamera();
+  Serial.println("Booting");
   pinMode(LED_BUILTIN, OUTPUT);
+  // blink LED 10x 
+  for(int i=0; i<10; i++){
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(50);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(50);
+  }
+  initCamera();
+
+
+    // Enable watchdog timer for 5 seconds
+  esp_task_wdt_init(1, true); // 5 seconds timeout, reset on timeout
+  esp_task_wdt_add(NULL); // Add the current task to the watchdog
+
 }
 
 
@@ -132,7 +152,7 @@ void loop()
       digitalWrite(LED_BUILTIN, LOW);
       delay(50);
       digitalWrite(LED_BUILTIN, HIGH);
-      delay(200);
+      delay(20);
       startTime = millis();
 
       // Take picture and read the frame buffer
@@ -148,15 +168,21 @@ void loop()
         Serial.println();
         for(int i=0; i<4; i++){
           digitalWrite(LED_BUILTIN, LOW);
-          delay(50);
+          delay(30);
           digitalWrite(LED_BUILTIN, HIGH);
-          delay(50);
+          delay(30);
         }
         
       }
       esp_camera_fb_return(fb);
     }
+    // clear the serial buffer to avoid overflow
+    while (Serial.available())
+      Serial.read();
   }
+
+  // Reset the watchdog timer periodically
+  esp_task_wdt_reset();
 }
 
 /*
