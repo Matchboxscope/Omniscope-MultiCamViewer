@@ -62,7 +62,7 @@ void  initCamera()
   config.jpeg_quality = 10;
   config.fb_count = 2;
   config.grab_mode = CAMERA_GRAB_LATEST;
-  config.frame_size = FRAMESIZE_VGA; // FRAMESIZE_SVGA; // iFRAMESIZE_UXGA;
+  config.frame_size = FRAMESIZE_SVGA; //FRAMESIZE_VGA; // ; // iFRAMESIZE_UXGA;
 
   // camera init
   esp_err_t err = esp_camera_init(&config);
