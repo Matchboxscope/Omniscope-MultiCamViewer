@@ -11,9 +11,10 @@ for port in ports:
 print(mDevices)
 print(len(mDevices))
 
+#mDevices = mDevices[0:2]  # Limit to the first two devices
 
 # Path to your compiled C++ application
-app_path = './ESP32/OmniscopeFW/app'
+app_path = './app'
 
 # Launch an instance of the app for each serial port
 processes = []

@@ -3,7 +3,7 @@
 /*
 brew install libserialport
 brew install opencv
- clang++  -o app  CPP/decodeImage.cpp   -I/opt/homebrew/Cellar/libserialport/0.1.1/include -L/opt/homebrew/Cellar/libserialport/0.1.1/lib -lserialport -I/opt/homebrew/Cellar/opencv/4.8.1_5/include/opencv4 -L/opt/homebrew/Cellar/opencv/4.8.1_5/lib -lopencv_core -lopencv_imgcodecs -lopencv_highgui -lserialport -std=c++11
+ clang++  -o app  ./ESP32/OmniscopeFW/CPP/decodeImage.cpp  -I/opt/homebrew/Cellar/libserialport/0.1.1/include -L/opt/homebrew/Cellar/libserialport/0.1.1/lib -lserialport -I/opt/homebrew/Cellar/opencv/4.8.1_5/include/opencv4 -L/opt/homebrew/Cellar/opencv/4.8.1_5/lib -lopencv_core -lopencv_imgcodecs -lopencv_highgui -lserialport -std=c++11
  ./app -s /dev/cu.usbmodem117101
 
 */
@@ -84,7 +84,6 @@ int main(int argc, char* argv[]) {
     
     
     // Open the port
-    std::cout << "Opening serial port..." << std::endl;
     sp_get_port_by_name(port_name, &port);
     sp_open(port, SP_MODE_READ_WRITE);
 
@@ -101,7 +100,8 @@ int main(int argc, char* argv[]) {
         // send string "c\n" to request the camera to send an image
         // Read data from serial port
         const char *command = "c\n";
-        sp_blocking_write(port, command, strlen(command), 1000);
+        //std::cout << "Sending command: " << command << std::endl;
+        sp_blocking_write(port, command, strlen(command), 100);
         sp_drain(port); // Waits until all data has been transmitted
 
         // Buffer for reading data
@@ -109,14 +109,31 @@ int main(int argc, char* argv[]) {
         char tempBuf[1024*16];
         int bytes_read;
 
+        int requestLoopCounter = 0;
         while (true)
         {
 
+            if (requestLoopCounter > 3)
+            {
+                std::cerr << "Error: Timeout while waiting for frame" << std::endl;
+                break;
+            }
             bytes_read = sp_blocking_read(port, tempBuf, sizeof(tempBuf), 100);
             tempBuf[bytes_read] = '\0';
             buffer += std::string(tempBuf);
-            //std::cout << "Bytes read: " << bytes_read << std::endl;
+            std::cout << "Bytes read: " << bytes_read << "from port: " << port_name <<  std::endl;
 
+
+            // if no bytes are read, increase the counter
+            if (bytes_read == 0)
+            {
+                requestLoopCounter++;
+                continue;
+            }
+            else
+            {
+                requestLoopCounter = 0;
+            }
             // Check for line break indicating end of frame
             size_t lineBreakPos = buffer.find('\n');
             if (lineBreakPos != std::string::npos)
@@ -140,9 +157,13 @@ int main(int argc, char* argv[]) {
                         std::string filename = "frame_" + std::to_string(frameCount++) + ".jpg";
                         cv::imwrite(filename, image);
                     }
-                    else{
-                        cv::imshow("Frame", image);
+                    else if (1)
+                    {
+                        cv::imshow(port_name, image);
                         cv::waitKey(1); // Update display window
+                    }
+                    else{
+                        std::cout << "Frame received" << port_name << std::endl;
                     }
                 }
 
