@@ -6,16 +6,31 @@
 #endif
 #include "camera_pins.h"
 #include <esp_task_wdt.h>
-#include "soc/soc.h"                      // disable brownout detector
-#include "soc/rtc_cntl_reg.h"             // disable brownout detector
+#include "soc/soc.h"          // disable brownout detector
+#include "soc/rtc_cntl_reg.h" // disable brownout detector
+
+#include "driver/i2c.h"
+#include "esp_camera.h"
+
+#define I2C_SLAVE_SCL_IO D1      // Example SCL pin
+#define I2C_SLAVE_SDA_IO D0      // Example SDA pin
+#define I2C_SLAVE_NUM I2C_NUM_0  // I2C port number for the slave device
+#define I2C_SLAVE_TX_BUF_LEN 256 //(2 * DATA_LENGTH)
+#define I2C_SLAVE_RX_BUF_LEN 256 //(2 * DATA_LENGTH)
+#define ESP_SLAVE_ADDR 0x28      // Slave address
+
+long startTime = 0;
+int lastBlink = 0;
+int blinkState = 0;
+int blinkPeriod = 500;
 
 
 #define BAUDRATE 500000
 #ifdef CAMERA_MODEL_XIAO
-void  initCamera()
+void initCamera()
 {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable brownout detector (Fehler bei WiFi Anmeldung beheben)
-  
+
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -62,7 +77,7 @@ void  initCamera()
   config.jpeg_quality = 10;
   config.fb_count = 2;
   config.grab_mode = CAMERA_GRAB_LATEST;
-  config.frame_size = FRAMESIZE_SVGA; //FRAMESIZE_VGA; // ; // iFRAMESIZE_UXGA;
+  config.frame_size = FRAMESIZE_SVGA; // FRAMESIZE_VGA; // ; // iFRAMESIZE_UXGA;
 
   // camera init
   esp_err_t err = esp_camera_init(&config);
@@ -71,47 +86,73 @@ void  initCamera()
     log_e("Camera init failed with error 0x%x", err);
     ESP.restart();
   }
-  //Serial.println("Camera init success!");
+  // Serial.println("Camera init success!");
 }
 #endif
 
-long startTime = 0;
+// Initialize I2C as master
+static esp_err_t i2c_slave_init()
+{
+  i2c_port_t i2c_slave_port = I2C_SLAVE_NUM;
+  i2c_config_t conf_slave;
+  conf_slave.sda_io_num = I2C_SLAVE_SDA_IO;
+  conf_slave.sda_pullup_en = GPIO_PULLUP_ENABLE;
+  conf_slave.scl_io_num = I2C_SLAVE_SCL_IO;
+  conf_slave.scl_pullup_en = GPIO_PULLUP_ENABLE;
+  conf_slave.mode = I2C_MODE_SLAVE;
+  conf_slave.slave.addr_10bit_en = 0;
+  conf_slave.slave.slave_addr = ESP_SLAVE_ADDR;
+  i2c_param_config(i2c_slave_port, &conf_slave);
+  return i2c_driver_install(i2c_slave_port, conf_slave.mode,
+                            I2C_SLAVE_RX_BUF_LEN, I2C_SLAVE_TX_BUF_LEN, 0);
+}
 
+/**
+ * Simulate capturing a frame and sending data based on camera ID.
+ * In a real application, this function would capture and chunk camera data.
+ */
+void simulate_frame_capture_and_send(uint8_t camera_id)
+{
+  // Simulate different responses based on camera ID
+  const char *response = (camera_id == 1) ? "Frame from Camera 1" : "Frame from Camera 2";
 
-int lastBlink = 0;
-int blinkState = 0;
-int blinkPeriod = 500;
+  // Log the response for demonstration purposes
+  Serial.print("Sending: ");
+  Serial.println(response);
 
+  // Send the response back over I2C (simplified, real implementation would chunk data)
+  i2c_slave_write_buffer(I2C_SLAVE_NUM, (uint8_t *)response, strlen(response), 1000 / portTICK_RATE_MS);
+}
+
+ 
 
 void setup()
 {
-  startTime = millis();
+
   Serial.begin(BAUDRATE);
+  Serial.println("Initializing I2C");
+  i2c_slave_init();
+
+  startTime = millis();
   Serial.println("Booting");
   pinMode(LED_BUILTIN, OUTPUT);
-  // blink LED 10x 
-  for(int i=0; i<10; i++){
+  // blink LED 10x
+  for (int i = 0; i < 10; i++)
+  {
     digitalWrite(LED_BUILTIN, LOW);
     delay(50);
     digitalWrite(LED_BUILTIN, HIGH);
     delay(50);
   }
   initCamera();
-
-
-    // Enable watchdog timer for 5 seconds
-  esp_task_wdt_init(1, true); // 5 seconds timeout, reset on timeout
-  esp_task_wdt_add(NULL); // Add the current task to the watchdog
-
 }
 
-
-
+uint8_t rx_buffer[128]; // Buffer for received data
+uint8_t inBuff[256];
 void loop()
 {
 
-  
-    // blink the LED
+  // blink the LED
   if (millis() - lastBlink > blinkPeriod)
   {
     digitalWrite(LED_BUILTIN, HIGH);
@@ -119,86 +160,29 @@ void loop()
     digitalWrite(LED_BUILTIN, LOW);
     delay(50);
     digitalWrite(LED_BUILTIN, HIGH);
-    delay(50);    
+    delay(50);
     lastBlink = millis();
   }
-  
-  // periodically reboot at random times in case serial connection is lost
-  if (millis() - startTime > random(30000, 60000))
+
+
+  int size = i2c_slave_read_buffer(I2C_SLAVE_NUM, rx_buffer, sizeof(rx_buffer), 1000 / portTICK_RATE_MS);
+  if (size > 0)
   {
-    // cut the line for 0.5 second by deepsleep to force a reboot
-    esp_sleep_enable_timer_wakeup(500000);
-    esp_deep_sleep_start();
+    // Give feedback
+    uint8_t camera_id = rx_buffer[0];
+    Serial.println("Received request for camera ID" + String(camera_id));
+    
+    // Send out frame 
+    camera_fb_t *fb = esp_camera_fb_get();
+    uint32_t frame_size = fb->len;
+    Serial.println("Frame size: " + String(frame_size));
+    // first send the size of the frame
+    i2c_slave_write_buffer(I2C_SLAVE_NUM, (uint8_t*)&frame_size, sizeof(frame_size), 1000 / portTICK_RATE_MS);
+    
+    
+    // then send the actual frame
+    //i2c_slave_write_buffer(I2C_SLAVE_NUM, fb->buf, fb->len, 1000 / portTICK_RATE_MS);
+    esp_camera_fb_return(fb);
+    
   }
-
-  if (Serial.available())
-  {
-    //
-    char c = Serial.read();
-    if (c == 'p')
-      Serial.println("ping!");
-    if (c == 'r')
-      ESP.restart();
-    if (c == 's'){
-      esp_sleep_enable_timer_wakeup(500000);
-      esp_deep_sleep_start();
-    }
-    if (c=='t'){
-      // return compile time
-      Serial.println(__DATE__ " " __TIME__);
-    }
-    if (c == 'c')
-    {
-      digitalWrite(LED_BUILTIN, LOW);
-      delay(50);
-      digitalWrite(LED_BUILTIN, HIGH);
-      delay(20);
-      startTime = millis();
-
-      // Take picture and read the frame buffer
-      camera_fb_t *fb = esp_camera_fb_get();
-      if (!fb)
-      {
-        Serial.println("FAIL");
-      }
-      else
-      {
-        String encoded = base64::encode(fb->buf, fb->len);
-        Serial.write(encoded.c_str(), encoded.length());
-        Serial.println();
-        for(int i=0; i<4; i++){
-          digitalWrite(LED_BUILTIN, LOW);
-          delay(30);
-          digitalWrite(LED_BUILTIN, HIGH);
-          delay(30);
-        }
-        
-      }
-      esp_camera_fb_return(fb);
-    }
-    // clear the serial buffer to avoid overflow
-    while (Serial.available())
-      Serial.read();
-  }
-
-  // Reset the watchdog timer periodically
-  esp_task_wdt_reset();
 }
-
-/*
-void grabImage()
-{
-
-  camera_fb_t *fb = esp_camera_fb_get();
-  if (!fb || fb->format != PIXFORMAT_JPEG)
-  {
-  }
-  else
-  {
-    String encoded = base64::encode(fb->buf, fb->len);
-    Serial.write(encoded.c_str(), encoded.length());
-    Serial.println();
-  }
-  esp_camera_fb_return(fb);
-}
-*/
