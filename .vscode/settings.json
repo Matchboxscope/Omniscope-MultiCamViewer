@@ -70,6 +70,8 @@
         "algorithm": "cpp",
         "thread": "cpp",
         "stdlib.h": "c",
-        "mqttasync.h": "c"
+        "mqttasync.h": "c",
+        "libusockets.h": "c",
+        "filesystem": "cpp"
     }
 }

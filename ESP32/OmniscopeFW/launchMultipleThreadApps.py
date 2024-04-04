@@ -11,7 +11,7 @@ for port in ports:
 print(mDevices)
 print(len(mDevices))
 
-
+asdf
 concatenatedDevices = " ".join(mDevices)
 
 #mDevices = mDevices[0:2]  # Limit to the first two devices
