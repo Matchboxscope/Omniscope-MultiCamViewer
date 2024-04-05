@@ -1,79 +1,103 @@
 #include <Wire.h>
 
 #define SLAVE_ADDR 0x28 // Address of the I2C slave devices
-#define MAX_CHUNK_SIZE 32 // Maximum number of bytes to request in one chunk
+#define MAX_CHUNK_SIZE 256 // Maximum number of bytes to request in one chunk
+
+size_t frame_size = 0; // Declare frame_size as a global variable
+
 
 // Replace these with the GPIO numbers you want to use
 const int SDA_PIN = 21; // GPIO number for I2C data line (SDA)
 const int SCL_PIN = 22; // GPIO number for I2C clock line (SCL)
 
 void setup() {
-  Serial.begin(115200); // Start serial communication at 115200 baud
+  Serial.begin(50000); // Start serial communication at 115200 baud
   Wire.begin(SDA_PIN, SCL_PIN); // Initialize I2C communication using specific pins
-  // Scan all IP aduint8_tdresses 
+  Wire.setClock(800000); 
+  // Scan all IP aduint8_tdresses
   Scanner();
 }
 
+int iiter = 0;
+
 void loop() {
   // Request frame from camera with ID 1
-  
-  requestFrame(1);
-  delay(1000); // Wait a bit before requesting the next frame
-  
+
+  // Step 1: Request and read the frame size
+  frame_size = requestFrameSize(iiter++);
+  if (frame_size == 0) {
+    Serial.println("Failed to read frame size or frame size is 0.");
+    delay(1000);  // Wait a bit before retrying
+    return;
   }
 
-void requestFrame(uint8_t cameraID) {
-  Serial.print("Requesting frame from camera ID ");
-  Serial.println(cameraID);
+  Serial.print("Frame size: ");
+  Serial.println(frame_size);
 
+  
+  // Step 2: Request and read the frame data in chunks
+  uint8_t* frame_data = new uint8_t[frame_size];
+  if (frame_data == nullptr) {
+    Serial.println("Failed to allocate memory for frame data.");
+    return;
+  }
+
+  Serial.println("Reading Frame....");
+  bool success = requestFrameData(frame_data, frame_size);
+  if (success) {
+    Serial.println("Frame data received successfully.");
+    // Process frame_data here
+  } else {
+    Serial.println("Failed to receive complete frame data.");
+  }
+
+//  delete[] frame_data;  // Clean up allocated memory
+
+
+  delay(1000); // Wait a bit before requesting the next frame
+
+}
+
+size_t requestFrameSize(int cameraID) {
+  
   Wire.beginTransmission(SLAVE_ADDR); // Begin I2C transmission to the slave device
   Wire.write(cameraID); // Send the camera ID as the request
   Wire.endTransmission(); // End transmission
 
-  // parse frame size
-  uint8_t frame_size = 0;
-  Wire.requestFrom(SLAVE_ADDR, sizeof(frame_size));
-  if (Wire.available() == sizeof(frame_size)) {
-    uint8_t* frame_size_ptr = (uint8_t*)&frame_size;
-    for (size_t i = 0; i < sizeof(frame_size); ++i) {
-      frame_size_ptr[i] = Wire.read();
-      Serial.println(frame_size_ptr[i]);
-    }
-    Serial.print("Frame size: ");
-    Serial.println(frame_size);
-  } else {
-    Serial.println("Failed to read frame size.");
-  }
   
-
-/*
-  // read the data 
-  uint32_t bytesRead = 0;
-  while (bytesRead < frame_size) {
-    uint8_t bytesToRequest = MAX_CHUNK_SIZE;
-    if (frame_size - bytesRead < MAX_CHUNK_SIZE) {
-      bytesToRequest = frame_size - bytesRead;
-    }
-
-    Wire.requestFrom(SLAVE_ADDR, bytesToRequest);
-    while (Wire.available()) {
-      char c = Wire.read();
-      Serial.print(c); // Or process/store the received byte
-      bytesRead++;
-    }
+  Wire.requestFrom(SLAVE_ADDR, 2);  // Request 2 bytes for the frame size
+  if (Wire.available() == 2) {
+    uint8_t highByte = Wire.read();
+    uint8_t lowByte = Wire.read();
+    return word(highByte, lowByte);
   }
-  */
-  /*
-  // Begin to read a response (for demonstration, let's assume a fixed size of data, e.g., 32 bytes)
-  Wire.requestFrom(SLAVE_ADDR, 32); // Request 32 bytes from the slave
-  while (Wire.available()) { // Slave may send less than requested
-    char c = Wire.read(); // Receive a byte as character
-    Serial.print(c); // Print the byte
-  }
-  Serial.println(); // New line after printing all data
-*/
+  return 0;  // Return 0 if failed to read frame size
 }
 
+bool requestFrameData(uint8_t* frame_data, size_t frame_size) {
+  Serial.println("Requesting Data");
+  size_t bytes_received = 0;
+  
+  while (bytes_received < frame_size) {
+    size_t chunk_size = min(static_cast<size_t>(MAX_CHUNK_SIZE), frame_size);
+    Wire.requestFrom(SLAVE_ADDR, chunk_size);
+    //Serial.print("+++");
+    while (Wire.available()) {
+      frame_data[bytes_received++] = Wire.read();
+      // Print bytes received for debugging
+      //Serial.print(frame_data[bytes_received - 1], HEX);
+    }    
+    //Serial.print("---");
+  }
+  // print the first 10 bytes of the frame
+  for (int i = 0; i < 10; i++) {
+    Serial.print(frame_data[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+  Serial.println(bytes_received);
+  return bytes_received == frame_size;  // Return true if all data was received
+}
 
 
 void Scanner()
@@ -86,7 +110,7 @@ void Scanner()
   for (byte i = 8; i < 120; i++)
   {
     Wire.beginTransmission (i);          // Begin I2C transmission Address (i)
-    if (Wire.endTransmission () == 0)  // Receive 0 = success (ACK response) 
+    if (Wire.endTransmission () == 0)  // Receive 0 = success (ACK response)
     {
       Serial.print ("Found address: ");
       Serial.print (i, DEC);
@@ -96,7 +120,7 @@ void Scanner()
       count++;
     }
   }
-  Serial.print ("Found ");      
+  Serial.print ("Found ");
   Serial.print (count, DEC);        // numbers of devices
   Serial.println (" device(s).");
 }

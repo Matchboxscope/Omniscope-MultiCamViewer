@@ -26,6 +26,7 @@ int blinkPeriod = 500;
 
 
 #define BAUDRATE 500000
+#ifdef CAMERA_MODEL_XIAO
 void initCamera()
 {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable brownout detector (Fehler bei WiFi Anmeldung beheben)
@@ -85,9 +86,9 @@ void initCamera()
     log_e("Camera init failed with error 0x%x", err);
     ESP.restart();
   }
-  Serial.println("Camera init success!");
+  // Serial.println("Camera init success!");
 }
-
+#endif
 
 // Initialize I2C as master
 static esp_err_t i2c_slave_init()
@@ -162,20 +163,13 @@ void loop()
     // Send out frame 
     camera_fb_t *fb = esp_camera_fb_get();
     size_t frame_size = fb->len;
-    Serial.println("Frame size: " + String(frame_size));
-    uint8_t buffer[2];
-    buffer[0] = highByte(frame_size);
-    buffer[1] = lowByte(frame_size);
-    i2c_slave_write_buffer(I2C_SLAVE_NUM, buffer, sizeof(buffer), 1000 / portTICK_RATE_MS);
+    // cast size to uint8_t
+    uint8_t size8 = (uint8_t)size;
+    Serial.println("Frame size: " + String(size8));
+    // first send the size of the frame
+    i2c_slave_write_buffer(I2C_SLAVE_NUM, (uint8_t*)&size8, sizeof(frame_size), 1000 / portTICK_RATE_MS);
     
-    // send the frame in chunks
-    int chunk_size = 256;
-    int chunks = frame_size / chunk_size;
-    int last_chunk_size = frame_size % chunk_size;
-    for (int i = 0; i < chunks; i++)
-    {
-      i2c_slave_write_buffer(I2C_SLAVE_NUM, fb->buf + i * chunk_size, chunk_size, 1000 / portTICK_RATE_MS);
-    }
+    
     // then send the actual frame
     //i2c_slave_write_buffer(I2C_SLAVE_NUM, fb->buf, fb->len, 1000 / portTICK_RATE_MS);
     esp_camera_fb_return(fb);
