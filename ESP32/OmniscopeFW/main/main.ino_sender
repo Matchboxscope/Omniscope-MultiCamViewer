@@ -1,0 +1,238 @@
+/*
+  ESP-NOW Remote Sensor - Transmitter (Multiple Version)
+  esp-now-xmit-multiple.ino
+  Sends Temperature & Humidity data to other ESP32 via ESP-NOW
+  Uses DHT22
+  Multiple Transmitter modification
+  
+  DroneBot Workshop 2022
+  https://dronebotworkshop.com
+*/
+
+// Include required libraries
+#include <WiFi.h>
+#include <esp_now.h>
+#include "esp_camera.h"
+#include "camera_pins.h"
+// Variables for temperature and humidity
+float temp;
+float humid;
+
+typedef struct struct_message_photo {
+  uint8_t photoBytes[160]; // ESP Now supports max of 250 bytes at each packet
+} struct_message_photo;
+
+struct_message_photo incomingData;
+
+
+// Integer for identification (make unique for each transmitter)
+int ident = 2;
+
+// Responder MAC Address (Replace with your responders MAC Address)
+//EC:DA:3B:41:63:5C
+uint8_t broadcastAddress[] = {0xEC, 0xDA, 0x3B, 0x41, 0x63, 0x5C};
+
+// Define data structure
+typedef struct struct_message {
+  float a;
+  float b;
+  int c;
+} struct_message;
+
+// Create structured data object
+struct_message myData;
+
+// Register peer
+esp_now_peer_info_t peerInfo;
+
+// Sent data callback function
+void OnDataSent(const uint8_t *macAddr, esp_now_send_status_t status)
+{
+  Serial.print("Last Packet Send Status: ");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+}
+
+void setup() {
+
+  // Setup Serial monitor
+  Serial.begin(115200);
+  delay(3000);
+
+  initCamera();
+  // Set ESP32 WiFi mode to Station temporarly
+  WiFi.mode(WIFI_STA);
+
+  // Initialize ESP-NOW
+  if (esp_now_init() != 0) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
+  }
+
+  // Define callback
+  esp_now_register_send_cb(OnDataSent);
+
+
+  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+
+  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+    Serial.println("Failed to add peer");
+    return;
+  }
+
+  
+}
+
+void loop() {
+
+  // Read DHT22 module values
+  temp = 100;
+  delay(10);
+  humid = 200;
+  delay(10);
+
+  Serial.print("Temp: ");
+  Serial.println(temp);
+  Serial.print("Humid: ");
+  Serial.println(humid);
+
+  // Add to structured data object
+  myData.a = temp;
+  myData.b = humid;
+  myData.c = ident;
+
+  // Send data
+  esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+
+  // Delay for DHT22 sensor
+  // send photo
+  writeFile();
+  delay(2000);
+}
+
+
+
+void writeFile() {
+  // https://github.com/emre-sahinn/RC-Tank-with-Robot-Arm/blob/ed1b5fffa0b027b817ef2d3966c86a1c69c69ac8/CamMaster/CamMaster.ino#L245
+  Serial.println("take photo..");
+
+  // Take Picture with Camera
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("Camera capture failed");
+    return;
+  }
+
+  // Print camera frame buffer properties
+  Serial.print("width: ");
+  Serial.println(fb->width);
+  Serial.print("height: ");
+  Serial.println(fb->height);
+  Serial.print("format: ");
+  Serial.println(fb->format);
+  Serial.print("size: ");
+  Serial.println(fb->len);
+  
+  Serial.println("buffer:");
+  size_t size = fb->len;
+  unsigned int byteCounter = 0;
+  bool exitWhile = false;
+  
+  Serial.println("!"); // Start sending photo
+  while (!exitWhile) {
+    for (uint8_t i = 0; i < 160; i++) {
+      incomingData.photoBytes[i] = fb->buf[byteCounter];
+      if (fb->len <= byteCounter + 25600) {
+        Serial.println("!!!!!!!!!!!!!");
+        Serial.println("ALL DATA SENT!");
+        Serial.println("!!!!!!!!!!!!!");
+        memset(incomingData.photoBytes, 0, sizeof(incomingData.photoBytes));
+        exitWhile = true;
+        esp_camera_fb_return(fb);
+        fb = NULL;
+        break;
+      }
+      byteCounter += 2;
+    }
+
+    delay(5); // Delay to simulate data processing time
+
+    // Send message via ESP-NOW
+    esp_err_t result = esp_now_send(broadcastAddress, (uint8_t *)&incomingData, sizeof(incomingData));
+    if (result == ESP_OK) {
+      Serial.print("Sent with success: ");
+      Serial.println(byteCounter);
+    } else {
+      Serial.println("Error sending the data");
+      exitWhile = true;
+    }
+  }
+  Serial.println("?"); // End sending photo
+}
+
+
+
+void initCamera()
+{
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sscb_sda = SIOD_GPIO_NUM;
+  config.pin_sscb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_JPEG; // for streaming
+  config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
+  config.fb_location = CAMERA_FB_IN_PSRAM;
+  config.jpeg_quality = 12;
+  config.fb_count = 1;
+
+  /*
+     FRAMESIZE_UXGA (1600 x 1200)
+    FRAMESIZE_QVGA (320 x 240)
+    FRAMESIZE_CIF (352 x 288)
+    FRAMESIZE_VGA (640 x 480)
+    FRAMESIZE_SVGA (800 x 600)
+    FRAMESIZE_XGA (1024 x 768)
+    FRAMESIZE_SXGA (1280 x 1024)
+  */
+  // if PSRAM IC present, init with UXGA resolution and higher JPEG quality
+  //                      for larger pre-allocated frame buffer.
+  if (psramFound())
+  {
+    Serial.println("PSRAM FOUND");
+    config.jpeg_quality = 10;
+    config.fb_count = 2;
+    config.grab_mode = CAMERA_GRAB_LATEST;
+    config.frame_size = FRAMESIZE_QVGA; // iFRAMESIZE_UXGA;
+  }
+  else
+  {
+    log_d("NO PSRAM");
+    // Limit the frame size when PSRAM is not available
+    config.frame_size = FRAMESIZE_VGA;
+    config.fb_location = CAMERA_FB_IN_DRAM;
+  }
+
+  // camera init
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK)
+  {
+    log_e("Camera init failed with error 0x%x", err);
+    ESP.restart();
+  }
+}
