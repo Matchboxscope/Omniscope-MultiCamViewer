@@ -11,33 +11,15 @@
 #include <driver/spi_slave.h>
 #include <nvs_flash.h>
 #include <driver/spi_slave.h>
+#include "camera_pins.h"
 
-// ESP32Cam (AiThinker) PIN Map
-#define CAM_PIN_PWDN 32
-#define CAM_PIN_RESET -1 //software reset will be performed
-#define CAM_PIN_XCLK 0
-#define CAM_PIN_SIOD 26
-#define CAM_PIN_SIOC 27
-#define CAM_PIN_D7 35
-#define CAM_PIN_D6 34
-#define CAM_PIN_D5 39
-#define CAM_PIN_D4 36
-#define CAM_PIN_D3 21
-#define CAM_PIN_D2 19
-#define CAM_PIN_D1 18
-#define CAM_PIN_D0 5
-#define CAM_PIN_VSYNC 25
-#define CAM_PIN_HREF 23
-#define CAM_PIN_PCLK 22
-
-#define GPIO_HANDSHAKE 2
-#define GPIO_MOSI 12
-#define GPIO_MISO 13
-#define GPIO_SCLK 15
-#define GPIO_CS 14
-
-#define CAM_WIDTH   320
-#define CAM_HEIGHT  240
+#define PIN_NUM_MOSI D10
+#define PIN_NUM_MISO D9
+#define PIN_NUM_CLK D8
+#define PIN_NUM_CS 21
+#define CAM_WIDTH 320
+#define CAM_HEIGHT 240
+#define GPIO_HANDSHAKE 22
 
 // SPI transaction states
 #define STATE_WAITING_FOR_REQUEST         2u
@@ -59,35 +41,11 @@ void my_post_trans_cb(spi_slave_transaction_t *trans) {
     WRITE_PERI_REG(GPIO_OUT_W1TC_REG, (1<<GPIO_HANDSHAKE));
 }
 
-// Camera configuration
-static camera_config_t camera_config = {
-    .pin_pwdn = CAM_PIN_PWDN,
-    .pin_reset = CAM_PIN_RESET,
-    .pin_xclk = CAM_PIN_XCLK,
-    .pin_sscb_sda = CAM_PIN_SIOD,
-    .pin_sscb_scl = CAM_PIN_SIOC,
-    .pin_d7 = CAM_PIN_D7,
-    .pin_d6 = CAM_PIN_D6,
-    .pin_d5 = CAM_PIN_D5,
-    .pin_d4 = CAM_PIN_D4,
-    .pin_d3 = CAM_PIN_D3,
-    .pin_d2 = CAM_PIN_D2,
-    .pin_d1 = CAM_PIN_D1,
-    .pin_d0 = CAM_PIN_D0,
-    .pin_vsync = CAM_PIN_VSYNC,
-    .pin_href = CAM_PIN_HREF,
-    .pin_pclk = CAM_PIN_PCLK,
-    .xclk_freq_hz = 20000000,
-    .ledc_timer = LEDC_TIMER_0,
-    .ledc_channel = LEDC_CHANNEL_0,
-    .pixel_format = PIXFORMAT_GRAYSCALE,
-    .frame_size = FRAMESIZE_QVGA,
-    .jpeg_quality = 12,
-    .fb_count = 1
-};
 
 // Main application entry point
 void setup() {
+    // wait for the serial connection to be established
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
       ESP_ERROR_CHECK(nvs_flash_erase());
@@ -97,6 +55,7 @@ void setup() {
 
     ESP_ERROR_CHECK(init_camera());
 
+    ESP_LOGI("Starting Code", "Camera Init Succeeded");
     xTaskCreate(spi_task, "spi_task", 4096, NULL, 5, NULL);
 }
 
@@ -104,7 +63,46 @@ void loop(){
 }
 
 static esp_err_t init_camera() {
-    esp_err_t err = esp_camera_init(&camera_config);
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sscb_sda = SIOD_GPIO_NUM;
+  config.pin_sscb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_JPEG; // for streaming
+  config.fb_location = CAMERA_FB_IN_PSRAM;
+  config.jpeg_quality = 12;
+  config.fb_count = 2;
+  config.jpeg_quality = 10;
+    
+    config.grab_mode = CAMERA_GRAB_LATEST;
+    config.frame_size = FRAMESIZE_VGA; // iFRAMESIZE_UXGA;
+
+
+  /*
+     FRAMESIZE_UXGA (1600 x 1200)
+    FRAMESIZE_QVGA (320 x 240)
+    FRAMESIZE_CIF (352 x 288)
+    FRAMESIZE_VGA (640 x 480)
+    FRAMESIZE_SVGA (800 x 600)
+    FRAMESIZE_XGA (1024 x 768)
+    FRAMESIZE_SXGA (1280 x 1024)
+  */
+    esp_err_t err = esp_camera_init(&config);
     if (err != ESP_OK) {
         ESP_LOGE("camera", "Camera Init Failed");
         return err;
@@ -118,9 +116,9 @@ void spi_task(void *pvParameters) {
 
     // Configure SPI bus
     spi_bus_config_t buscfg = {
-        .mosi_io_num = GPIO_MOSI,
-        .miso_io_num = GPIO_MISO,
-        .sclk_io_num = GPIO_SCLK,
+        .mosi_io_num = PIN_NUM_MOSI,
+        .miso_io_num = PIN_NUM_MISO,
+        .sclk_io_num = PIN_NUM_CLK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
         .max_transfer_sz = CAM_WIDTH*CAM_HEIGHT
@@ -128,12 +126,12 @@ void spi_task(void *pvParameters) {
 
     // Configure SPI slave interface
     spi_slave_interface_config_t slvcfg;
-    slvcfg.mode = 1;
-    slvcfg.spics_io_num = GPIO_CS;
+    slvcfg.mode = 0;
+    slvcfg.spics_io_num = PIN_NUM_CS;
     slvcfg.queue_size = 3;
     slvcfg.flags = 0;
-    slvcfg.post_setup_cb = my_post_setup_cb;
-    slvcfg.post_trans_cb = my_post_trans_cb;
+    slvcfg.post_setup_cb = NULL;
+    slvcfg.post_trans_cb = NULL;
     
     // Handshake line configuration
     gpio_config_t io_conf;
@@ -143,20 +141,29 @@ void spi_task(void *pvParameters) {
     gpio_config(&io_conf);
 
     // Initialize SPI slave
-    ret = spi_slave_initialize(SPI2_HOST, &buscfg, &slvcfg, 1);
+    ret = spi_slave_initialize(SPI2_HOST, &buscfg, &slvcfg, SPI_DMA_CH_AUTO);
     assert(ret == ESP_OK);
 
-    uint8_t *camera_frame = (uint8_t *)heap_caps_malloc(CAM_WIDTH*CAM_HEIGHT, MALLOC_CAP_DMA);
+    uint8_t *camera_frame = (uint8_t *)heap_caps_malloc(CAM_WIDTH*CAM_HEIGHT, MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
+    //uint8_t *camera_frame = (uint8_t *)heap_caps_malloc(CAM_WIDTH*CAM_HEIGHT, MALLOC_CAP_DMA);
     spi_slave_transaction_t t = { 0 };
-    uint8_t recvbuf[1]; // Buffer to receive request
+    // Allocate recvbuf dynamically if it needs to be DMA-capable
+    uint8_t *recvbuf = (uint8_t*)heap_caps_malloc(sizeof(uint8_t), MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
 
+    ESP_LOGI("Starting ", "SPI starts");
     while (1) {
         memset(recvbuf, 0, sizeof(recvbuf));
         t.length = 8; // 8 bits
         t.tx_buffer = NULL;
         t.rx_buffer = recvbuf;
         ret = spi_slave_transmit(SPI2_HOST, &t, portMAX_DELAY);
-
+        if (ret != ESP_OK) {
+            ESP_LOGE("spi", "Failed to receive request");
+            continue;
+        }
+        else{
+            ESP_LOGI("spi", "Received request: %d", recvbuf[0]);
+        }
         if (ret == ESP_OK && recvbuf[0] == REQ_CAMERA_PIC) {
             // Capture the frame
             camera_fb_t *pic = esp_camera_fb_get();
@@ -164,7 +171,7 @@ void spi_task(void *pvParameters) {
                 ESP_LOGE("camera", "Camera Capture Failed");
                 continue;
             }
-
+            ESP_LOGI("Frame ", "SPI status: ");
             // Prepare for sending the frame over SPI
             memcpy(camera_frame, pic->buf, pic->len);
             esp_camera_fb_return(pic);
