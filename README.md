@@ -170,7 +170,9 @@ All camera frames will be stored periodically in the folder: `./server/saved_ima
 
 - if the socket server connection will break, the camera will automatically restart and try to reconnect 
 
+## Camera Lenses
 
+https://www.largan.com.tw/html/product/alllist/all-list.htm
 
 ## Errors:
 
