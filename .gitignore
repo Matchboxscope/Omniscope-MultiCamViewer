@@ -3,3 +3,5 @@ node_modules/
 package-lock.json
 electron/dist*
 server/saved_images/Camera*
+/ESP32/OmniscopeFW/build
+/ESP32/OmniscopeFW/managed_components
